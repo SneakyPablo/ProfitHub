@@ -108,6 +108,49 @@ class ProductManager(commands.Cog):
         await self.bot.db.add_product_key(key_data)
         await interaction.response.send_message("Key added successfully!", ephemeral=True)
 
+    @app_commands.command(name="products")
+    async def list_products(self, interaction: discord.Interaction):
+        """List all products you have access to view"""
+        is_admin = interaction.guild.get_role(self.bot.config.ADMIN_ROLE_ID) in interaction.user.roles
+        
+        if is_admin:
+            # Admin can see all products
+            products = await self.bot.db.get_all_products()
+        else:
+            # Sellers can only see their products
+            products = await self.bot.db.get_seller_products(str(interaction.user.id))
+        
+        if not products:
+            await interaction.response.send_message(
+                "No products found.", 
+                ephemeral=True
+            )
+            return
+        
+        embed = discord.Embed(
+            title="🏪 Product List",
+            color=discord.Color.blue()
+        )
+        
+        for product in products:
+            seller = interaction.guild.get_member(int(product['seller_id']))
+            seller_name = seller.display_name if seller else "Unknown Seller"
+            
+            value = (
+                f"Price: ${product['price']:.2f}\n"
+                f"Category: {product.get('category', 'N/A')}\n"
+                f"Seller: {seller_name}\n"
+                f"ID: `{product['_id']}`"
+            )
+            
+            embed.add_field(
+                name=f"📦 {product['name']}",
+                value=value,
+                inline=False
+            )
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
 class ProductPanel(discord.ui.View):
     def __init__(self, product_id: str):
         super().__init__(timeout=None)
