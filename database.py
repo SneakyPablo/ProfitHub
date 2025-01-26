@@ -4,13 +4,13 @@ import os
 
 class Database:
     def __init__(self):
-        # Get MongoDB URI from environment variable
-        mongodb_uri = os.getenv('MONGODB_URI')
+        # Get MongoDB URI from Railway variables
+        mongodb_uri = os.environ.get('MONGODB_URL')  # Railway uses MONGODB_URL by default
         if not mongodb_uri:
-            raise ValueError("MONGODB_URI environment variable not set")
+            raise ValueError("MONGODB_URL environment variable not set")
             
         self.client = AsyncIOMotorClient(mongodb_uri)
-        self.db = self.client.marketplace
+        self.db = self.client.marketplace  # You can change 'marketplace' to your preferred database name
         
         # Collections
         self.products = self.db.products
@@ -43,7 +43,7 @@ class Database:
         return result.inserted_id
 
     async def get_reviews(self, seller_id):
-        cursor = self.reviews.find({'seller_id': seller_id})
+        cursor = self.reviews.find({'seller_id': seller_id}).sort('created_at', -1)
         return await cursor.to_list(length=None)
 
     async def add_product_key(self, data):
