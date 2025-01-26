@@ -99,20 +99,45 @@ class SellerConfirmationView(discord.ui.View):
         # Mark key as used
         await interaction.client.db.mark_key_as_used(key['_id'], ticket['buyer_id'])
         
-        # Send key to buyer
-        embed = discord.Embed(
-            title="🔑 Product Key Delivered",
-            description=f"Thank you for your purchase! Here's your product key:\n\n`{key['key']}`",
-            color=discord.Color.green()
-        )
-        
-        await interaction.channel.send(embed=embed)
+        # Get buyer and send DM
+        buyer = interaction.guild.get_member(int(ticket['buyer_id']))
+        try:
+            embed = discord.Embed(
+                title="🔑 Your Product Key",
+                description=f"Thank you for your purchase! Here's your product key:\n\n`{key['key']}`",
+                color=discord.Color.green()
+            )
+            await buyer.send(embed=embed)
+            
+            # Send confirmation in ticket
+            await interaction.channel.send("✅ Product key has been delivered to buyer's DM!")
+        except discord.Forbidden:
+            await interaction.channel.send(
+                f"⚠️ Couldn't DM the buyer. Here's the key (visible only in ticket):\n`{key['key']}`"
+            )
         
         # Disable the button
         button.disabled = True
         await interaction.response.edit_message(view=self)
         
-        # Optional: Start auto-close timer
+        # Update product panel if it exists
+        try:
+            product = await interaction.client.db.get_product(ticket['product_id'])
+            if product:
+                # Find and update the product panel
+                async for message in interaction.channel.guild.get_channel(ticket['channel_id']).history():
+                    if message.author == interaction.client.user and len(message.embeds) > 0:
+                        embed = message.embeds[0]
+                        keys_available = await interaction.client.db.get_available_key_count(ticket['product_id'])
+                        for field in embed.fields:
+                            if field.name == "📦 Stock":
+                                field.value = f"Keys Available: {keys_available}"
+                                await message.edit(embed=embed)
+                                break
+        except Exception as e:
+            print(f"Error updating product panel: {e}")
+        
+        # Start auto-close timer
         await asyncio.sleep(300)  # 5 minutes
         await interaction.channel.send("This ticket will be closed in 5 minutes.")
         await asyncio.sleep(300)
