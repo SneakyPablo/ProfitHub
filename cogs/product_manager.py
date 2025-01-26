@@ -40,19 +40,8 @@ class ProductManager(commands.Cog):
             'category': category
         }
         
-        # First create the product to get the ID
+        # Create the product first
         product_id = await self.bot.db.create_product(product_data)
-        
-        # Now check if there are any keys in stock
-        keys = await self.bot.db.get_product_key_count(product_id)
-        if keys == 0:
-            # If no keys, delete the product and inform the seller
-            await self.bot.db.delete_product(product_id)
-            await interaction.response.send_message(
-                "You need to add keys before creating a panel! Use /addkey to add keys.", 
-                ephemeral=True
-            )
-            return
         
         embed = discord.Embed(
             title=f"🌟 {name}",
@@ -84,10 +73,9 @@ class ProductManager(commands.Cog):
         embed.add_field(name="💳 Pricing", value=pricing_text, inline=False)
         
         # Stock counter
-        keys_available = await self.bot.db.get_available_key_count(product_id)
         embed.add_field(
             name="📦 Stock",
-            value=f"Keys Available: {keys_available}",
+            value="Keys Available: 0 (Use /addkey to add keys)",
             inline=True
         )
         
@@ -110,7 +98,10 @@ class ProductManager(commands.Cog):
         
         view = ProductPanel(str(product_id))
         await interaction.channel.send(embed=embed, view=view)
-        await interaction.response.send_message("Product panel created!", ephemeral=True)
+        await interaction.response.send_message(
+            f"Product panel created! Use `/addkey {product_id} <license_type> <key>` to add keys.", 
+            ephemeral=True
+        )
 
     @app_commands.command(name="keys")
     @is_seller()
@@ -173,7 +164,7 @@ class ProductManager(commands.Cog):
 
     @app_commands.command(name="addkey")
     @is_seller()
-    async def addkey(self, interaction: discord.Interaction, product_name: str, 
+    async def addkey(self, interaction: discord.Interaction, product_id: str, 
                      license_type: str, key: str):
         """Add a key to your product"""
         # Validate license type
@@ -184,48 +175,57 @@ class ProductManager(commands.Cog):
             )
             return
 
-        # Find product by name for this seller
-        product = await self.bot.db.get_product_by_name_and_seller(
-            product_name, 
-            str(interaction.user.id)
-        )
-        
-        if not product:
+        try:
+            # Get product and verify ownership
+            product = await self.bot.db.get_product(ObjectId(product_id))
+            if not product:
+                await interaction.response.send_message(
+                    "Product not found! Make sure the ID is correct.", 
+                    ephemeral=True
+                )
+                return
+            
+            if product['seller_id'] != str(interaction.user.id):
+                await interaction.response.send_message(
+                    "You don't own this product!", 
+                    ephemeral=True
+                )
+                return
+
+            key_data = {
+                'product_id': product['_id'],
+                'key': key,
+                'seller_id': str(interaction.user.id),
+                'license_type': license_type.lower(),
+                'is_used': False
+            }
+            
+            await self.bot.db.add_product_key(key_data)
+            
+            # Update product panel if it exists
+            try:
+                async for message in interaction.channel.history():
+                    if message.author == self.bot.user and len(message.embeds) > 0:
+                        embed = message.embeds[0]
+                        if str(product['_id']) in embed.footer.text:
+                            keys_available = await self.bot.db.get_available_key_count(product['_id'])
+                            for field in embed.fields:
+                                if field.name == "📦 Stock":
+                                    field.value = f"Keys Available: {keys_available}"
+                                    await message.edit(embed=embed)
+                                    break
+            except Exception as e:
+                print(f"Error updating product panel: {e}")
+
             await interaction.response.send_message(
-                f"Product '{product_name}' not found! Make sure the name is exact.", 
+                f"Key added successfully to {product['name']} ({license_type})!", 
                 ephemeral=True
             )
-            return
-
-        key_data = {
-            'product_id': product['_id'],
-            'key': key,
-            'seller_id': str(interaction.user.id),
-            'license_type': license_type.lower(),
-            'is_used': False
-        }
-        
-        await self.bot.db.add_product_key(key_data)
-        
-        # Update product panel if it exists
-        try:
-            async for message in interaction.channel.history():
-                if message.author == self.bot.user and len(message.embeds) > 0:
-                    embed = message.embeds[0]
-                    if str(product['_id']) in embed.footer.text:
-                        keys_available = await self.bot.db.get_available_key_count(product['_id'])
-                        for field in embed.fields:
-                            if field.name == "📦 Stock":
-                                field.value = f"Keys Available: {keys_available}"
-                                await message.edit(embed=embed)
-                                break
         except Exception as e:
-            print(f"Error updating product panel: {e}")
-
-        await interaction.response.send_message(
-            f"Key added successfully to {product_name} ({license_type})!", 
-            ephemeral=True
-        )
+            await interaction.response.send_message(
+                f"Error adding key: Invalid product ID format", 
+                ephemeral=True
+            )
 
     @app_commands.command(name="deletekey")
     @is_seller()
