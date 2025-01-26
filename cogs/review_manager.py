@@ -30,15 +30,54 @@ class ReviewManager(commands.Cog):
             'seller_id': str(seller.id),
             'reviewer_id': str(interaction.user.id),
             'rating': rating,
-            'comment': comment
+            'comment': comment,
+            'created_at': discord.utils.utcnow()
         }
         
         await self.bot.db.create_review(review_data)
         
-        stars = "⭐" * rating
-        await interaction.response.send_message(
-            f"Review submitted for {seller.mention}!\nRating: {stars}\nComment: {comment}"
+        # Create an enhanced review embed
+        embed = discord.Embed(
+            title=f"⭐ New Review for {seller.display_name}",
+            color=discord.Color.gold()
         )
+        
+        # Reviewer info
+        embed.set_author(
+            name=interaction.user.display_name,
+            icon_url=interaction.user.display_avatar.url
+        )
+        
+        # Rating display
+        stars = "⭐" * rating + "☆" * (5 - rating)
+        embed.add_field(
+            name="Rating",
+            value=stars,
+            inline=False
+        )
+        
+        # Review comment
+        embed.add_field(
+            name="Comment",
+            value=comment,
+            inline=False
+        )
+        
+        # Get seller's average rating
+        all_reviews = await self.bot.db.get_reviews(str(seller.id))
+        avg_rating = sum(r['rating'] for r in all_reviews) / len(all_reviews)
+        total_reviews = len(all_reviews)
+        
+        embed.add_field(
+            name="Seller Statistics",
+            value=f"Average Rating: {avg_rating:.1f} ⭐\nTotal Reviews: {total_reviews}",
+            inline=True
+        )
+        
+        embed.set_footer(text=f"Review ID: {review_data['_id']} • {discord.utils.format_dt(discord.utils.utcnow())}")
+        
+        await interaction.channel.send(embed=embed)
+        await interaction.response.send_message("Review posted successfully!", ephemeral=True)
 
     @app_commands.command(name="vouches")
     async def vouches(self, interaction: discord.Interaction, seller: discord.Member):
