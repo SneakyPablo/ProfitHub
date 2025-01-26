@@ -112,31 +112,205 @@ class ProductManager(commands.Cog):
         await interaction.channel.send(embed=embed, view=view)
         await interaction.response.send_message("Product panel created!", ephemeral=True)
 
+    @app_commands.command(name="keys")
+    @is_seller()
+    async def view_keys(self, interaction: discord.Interaction):
+        """View all your product keys"""
+        # Get all products for this seller
+        products = await self.bot.db.get_seller_products(str(interaction.user.id))
+        
+        if not products:
+            await interaction.response.send_message(
+                "You don't have any products!", 
+                ephemeral=True
+            )
+            return
+
+        embeds = []
+        current_embed = discord.Embed(
+            title="🔑 Your Product Keys",
+            color=discord.Color.blue()
+        )
+        field_count = 0
+
+        for product in products:
+            # Get keys for each license type
+            daily_keys = await self.bot.db.get_keys_by_type(product['_id'], 'daily')
+            monthly_keys = await self.bot.db.get_keys_by_type(product['_id'], 'monthly')
+            lifetime_keys = await self.bot.db.get_keys_by_type(product['_id'], 'lifetime')
+            
+            value = (
+                f"**Daily Keys:** {len([k for k in daily_keys if not k['is_used']])}/{len(daily_keys)}\n"
+                f"**Monthly Keys:** {len([k for k in monthly_keys if not k['is_used']])}/{len(monthly_keys)}\n"
+                f"**Lifetime Keys:** {len([k for k in lifetime_keys if not k['is_used']])}/{len(lifetime_keys)}\n"
+                f"Product ID: `{product['_id']}`"
+            )
+            
+            current_embed.add_field(
+                name=f"📦 {product['name']}",
+                value=value,
+                inline=False
+            )
+            field_count += 1
+            
+            if field_count == 25:
+                embeds.append(current_embed)
+                current_embed = discord.Embed(
+                    title="🔑 Your Product Keys (Continued)",
+                    color=discord.Color.blue()
+                )
+                field_count = 0
+        
+        if field_count > 0:
+            embeds.append(current_embed)
+        
+        if len(embeds) == 1:
+            await interaction.response.send_message(embed=embeds[0], ephemeral=True)
+        else:
+            await interaction.response.send_message(embed=embeds[0], ephemeral=True)
+            for embed in embeds[1:]:
+                await interaction.followup.send(embed=embed, ephemeral=True)
+
     @app_commands.command(name="addkey")
     @is_seller()
-    async def addkey(self, interaction: discord.Interaction, product_id: str, key: str):
-        try:
-            product = await self.bot.db.get_product(ObjectId(product_id))
-        except:
-            await interaction.response.send_message("Invalid product ID!", ephemeral=True)
+    async def addkey(self, interaction: discord.Interaction, product_name: str, 
+                     license_type: str, key: str):
+        """Add a key to your product"""
+        # Validate license type
+        if license_type.lower() not in ['daily', 'monthly', 'lifetime']:
+            await interaction.response.send_message(
+                "Invalid license type! Use 'daily', 'monthly', or 'lifetime'", 
+                ephemeral=True
+            )
             return
-            
+
+        # Find product by name for this seller
+        product = await self.bot.db.get_product_by_name_and_seller(
+            product_name, 
+            str(interaction.user.id)
+        )
+        
         if not product:
-            await interaction.response.send_message("Product not found!", ephemeral=True)
+            await interaction.response.send_message(
+                f"Product '{product_name}' not found! Make sure the name is exact.", 
+                ephemeral=True
+            )
             return
-            
-        if product['seller_id'] != str(interaction.user.id):
-            await interaction.response.send_message("You don't own this product!", ephemeral=True)
-            return
-            
+
         key_data = {
-            'product_id': ObjectId(product_id),
+            'product_id': product['_id'],
             'key': key,
-            'seller_id': str(interaction.user.id)
+            'seller_id': str(interaction.user.id),
+            'license_type': license_type.lower(),
+            'is_used': False
         }
         
         await self.bot.db.add_product_key(key_data)
-        await interaction.response.send_message("Key added successfully!", ephemeral=True)
+        
+        # Update product panel if it exists
+        try:
+            async for message in interaction.channel.history():
+                if message.author == self.bot.user and len(message.embeds) > 0:
+                    embed = message.embeds[0]
+                    if str(product['_id']) in embed.footer.text:
+                        keys_available = await self.bot.db.get_available_key_count(product['_id'])
+                        for field in embed.fields:
+                            if field.name == "📦 Stock":
+                                field.value = f"Keys Available: {keys_available}"
+                                await message.edit(embed=embed)
+                                break
+        except Exception as e:
+            print(f"Error updating product panel: {e}")
+
+        await interaction.response.send_message(
+            f"Key added successfully to {product_name} ({license_type})!", 
+            ephemeral=True
+        )
+
+    @app_commands.command(name="deletekey")
+    @is_seller()
+    async def deletekey(self, interaction: discord.Interaction, key_id: str):
+        """Delete a key from your product"""
+        key = await self.bot.db.get_key(ObjectId(key_id))
+        
+        if not key:
+            await interaction.response.send_message("Key not found!", ephemeral=True)
+            return
+        
+        if key['seller_id'] != str(interaction.user.id):
+            await interaction.response.send_message(
+                "You don't own this key!", 
+                ephemeral=True
+            )
+            return
+        
+        await self.bot.db.delete_key(ObjectId(key_id))
+        await interaction.response.send_message("Key deleted successfully!", ephemeral=True)
+
+    @app_commands.command(name="viewproductkeys")
+    @is_seller()
+    async def view_product_keys(self, interaction: discord.Interaction, product_name: str):
+        """View all keys for a specific product"""
+        product = await self.bot.db.get_product_by_name_and_seller(
+            product_name, 
+            str(interaction.user.id)
+        )
+        
+        if not product:
+            await interaction.response.send_message(
+                f"Product '{product_name}' not found!", 
+                ephemeral=True
+            )
+            return
+
+        keys = await self.bot.db.get_product_keys(product['_id'])
+        
+        if not keys:
+            await interaction.response.send_message(
+                "No keys found for this product!", 
+                ephemeral=True
+            )
+            return
+
+        embeds = []
+        current_embed = discord.Embed(
+            title=f"🔑 Keys for {product_name}",
+            color=discord.Color.blue()
+        )
+        
+        # Group keys by license type
+        daily_keys = [k for k in keys if k['license_type'] == 'daily']
+        monthly_keys = [k for k in keys if k['license_type'] == 'monthly']
+        lifetime_keys = [k for k in keys if k['license_type'] == 'lifetime']
+        
+        for license_type, type_keys in [
+            ("Daily", daily_keys),
+            ("Monthly", monthly_keys),
+            ("Lifetime", lifetime_keys)
+        ]:
+            if type_keys:
+                value = ""
+                for key in type_keys:
+                    status = "🔴 Used" if key['is_used'] else "🟢 Available"
+                    value += f"ID: `{key['_id']}`\nKey: `{key['key']}`\nStatus: {status}\n\n"
+                
+                if len(value) > 1024:
+                    # Split into multiple fields if too long
+                    chunks = [value[i:i + 1000] for i in range(0, len(value), 1000)]
+                    for i, chunk in enumerate(chunks):
+                        current_embed.add_field(
+                            name=f"{license_type} Keys (Part {i+1})",
+                            value=chunk,
+                            inline=False
+                        )
+                else:
+                    current_embed.add_field(
+                        name=f"{license_type} Keys",
+                        value=value,
+                        inline=False
+                    )
+
+        await interaction.response.send_message(embed=current_embed, ephemeral=True)
 
     @app_commands.command(name="products")
     async def list_products(self, interaction: discord.Interaction):
