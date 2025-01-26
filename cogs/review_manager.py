@@ -6,6 +6,16 @@ class ReviewManager(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @commands.Cog.listener()
+    async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.errors.MissingRole):
+            await interaction.response.send_message(
+                f"You don't have permission to use this command.", 
+                ephemeral=True
+            )
+        else:
+            print(f'Error in {interaction.command.name}: {str(error)}')
+
     @app_commands.command(name="vouch")
     async def vouch(self, interaction: discord.Interaction, seller: discord.Member, 
                    rating: int, comment: str):
