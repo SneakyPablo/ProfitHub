@@ -11,14 +11,19 @@ class ProductManager(commands.Cog):
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.errors.MissingRole):
             await interaction.response.send_message(
-                f"You need the Seller role (ID: {self.bot.config.SELLER_ROLE_ID}) to use this command.", 
+                f"You need the Seller role to use this command.", 
                 ephemeral=True
             )
         else:
             print(f'Error in {interaction.command.name}: {str(error)}')
 
+    def is_seller():
+        def predicate(interaction: discord.Interaction) -> bool:
+            return interaction.guild.get_role(interaction.client.config.SELLER_ROLE_ID) in interaction.user.roles
+        return app_commands.check(predicate)
+
     @app_commands.command(name="createpanel")
-    @app_commands.checks.has_role(lambda x: x.bot.config.SELLER_ROLE_ID)
+    @is_seller()
     async def createpanel(self, interaction: discord.Interaction, name: str, price: float, 
                          description: str, category: str = None):
         product_data = {
@@ -46,7 +51,7 @@ class ProductManager(commands.Cog):
         await interaction.response.send_message("Product panel created!", ephemeral=True)
 
     @app_commands.command(name="addkey")
-    @app_commands.checks.has_role(lambda x: x.bot.config.SELLER_ROLE_ID)
+    @is_seller()
     async def addkey(self, interaction: discord.Interaction, product_id: str, key: str):
         try:
             product = await self.bot.db.get_product(ObjectId(product_id))
