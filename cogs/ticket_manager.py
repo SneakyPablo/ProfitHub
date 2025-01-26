@@ -158,7 +158,8 @@ class TicketManager(commands.Cog):
         else:
             print(f'Error in {interaction.command.name}: {str(error)}')
 
-    async def create_ticket(self, interaction: discord.Interaction, product_id: str):
+    async def create_ticket(self, interaction: discord.Interaction, product_id: str, license_type: str = None):
+        """Create a new ticket"""
         # Check if user already has an active ticket
         if interaction.user.id in self.active_tickets:
             await interaction.response.send_message(
@@ -184,11 +185,15 @@ class TicketManager(commands.Cog):
             }
         )
         
+        price = product['prices'].get(license_type, 0) if license_type else 0
+        
         ticket_data = {
             'channel_id': str(channel.id),
             'product_id': ObjectId(product_id),
             'buyer_id': str(interaction.user.id),
             'seller_id': str(seller.id),
+            'license_type': license_type,
+            'price': price,
             'status': 'open'
         }
         
@@ -197,16 +202,23 @@ class TicketManager(commands.Cog):
         # Send initial ticket message
         embed = discord.Embed(
             title="🛍️ New Purchase Ticket",
-            description=f"Product: {product['name']}\nPrice: ${product['price']}",
+            description=(
+                f"**Product:** {product['name']}\n"
+                f"**Type:** {license_type.title() if license_type else 'N/A'} License\n"
+                f"**Price:** ${price:.2f}"
+            ),
             color=discord.Color.green()
         )
-        embed.add_field(name="Buyer", value=interaction.user.mention)
-        embed.add_field(name="Seller", value=seller.mention)
+        embed.add_field(name="👤 Buyer", value=interaction.user.mention)
+        embed.add_field(name="💼 Seller", value=seller.mention)
         await channel.send(embed=embed)
         
         # Send payment method selector
         payment_view = PaymentView()
-        await channel.send("Please select your payment method:", view=payment_view)
+        await channel.send(
+            "Please select your payment method (you can only select once):", 
+            view=payment_view
+        )
         
         await interaction.response.send_message(
             f"Ticket created! Please check {channel.mention}", 
