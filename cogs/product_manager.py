@@ -27,6 +27,7 @@ class ProductManager(commands.Cog):
     async def createpanel(self, interaction: discord.Interaction, name: str, 
                          daily_price: float, monthly_price: float, lifetime_price: float,
                          description: str, category: str = None):
+        """Create a new product panel"""
         product_data = {
             'name': name,
             'description': description,
@@ -39,16 +40,19 @@ class ProductManager(commands.Cog):
             'category': category
         }
         
-        # Check if there are any keys in stock
-        keys = await self.bot.db.get_product_key_count(ObjectId(product_id))
+        # First create the product to get the ID
+        product_id = await self.bot.db.create_product(product_data)
+        
+        # Now check if there are any keys in stock
+        keys = await self.bot.db.get_product_key_count(product_id)
         if keys == 0:
+            # If no keys, delete the product and inform the seller
+            await self.bot.db.delete_product(product_id)
             await interaction.response.send_message(
                 "You need to add keys before creating a panel! Use /addkey to add keys.", 
                 ephemeral=True
             )
             return
-        
-        product_id = await self.bot.db.create_product(product_data)
         
         embed = discord.Embed(
             title=f"🌟 {name}",
@@ -80,7 +84,7 @@ class ProductManager(commands.Cog):
         embed.add_field(name="💳 Pricing", value=pricing_text, inline=False)
         
         # Stock counter
-        keys_available = await self.bot.db.get_available_key_count(ObjectId(product_id))
+        keys_available = await self.bot.db.get_available_key_count(product_id)
         embed.add_field(
             name="📦 Stock",
             value=f"Keys Available: {keys_available}",
