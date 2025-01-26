@@ -76,7 +76,7 @@ class ProductPanel(discord.ui.View):
         super().__init__(timeout=None)
         self.product_id = product_id
 
-    @discord.ui.button(label="Buy Now", style=discord.ButtonStyle.green)
+    @discord.ui.button(label="Buy Now", style=discord.ButtonStyle.success)
     async def buy_now(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Get the ticket manager cog
         ticket_manager = interaction.client.get_cog('TicketManager')
@@ -88,7 +88,7 @@ class ProductPanel(discord.ui.View):
                 ephemeral=True
             )
 
-    @discord.ui.button(label="Request Info", style=discord.ButtonStyle.blue)
+    @discord.ui.button(label="Request Info", style=discord.ButtonStyle.primary)
     async def request_info(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             product = await interaction.client.db.get_product(ObjectId(self.product_id))
