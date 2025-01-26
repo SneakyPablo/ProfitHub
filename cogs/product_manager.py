@@ -45,6 +45,7 @@ class ProductManager(commands.Cog):
         
         embed = discord.Embed(
             title=f"🌟 {name}",
+            description=f"A premium product by {interaction.user.mention}",
             color=discord.Color.gold()
         )
         
@@ -52,49 +53,60 @@ class ProductManager(commands.Cog):
         features = description.split('\n')
         features_text = ""
         for feature in features:
-            features_text += f"• {feature.strip()}\n"
-            
+            if feature.strip():
+                features_text += f"✅ {feature.strip()}\n"
+        
         embed.add_field(
-            name="✨ Features",
+            name="📋 Features",
             value=features_text or "No features listed",
             inline=False
         )
         
-        # Pricing section
-        pricing_text = (
-            f"💰 **License Prices**\n"
-            f"Daily: ${daily_price:.2f}\n"
-            f"Monthly: ${monthly_price:.2f}\n"
-            f"Lifetime: ${lifetime_price:.2f}"
+        # Pricing section with better formatting
+        embed.add_field(
+            name="💰 License Pricing",
+            value=(
+                "```\n"
+                f"Daily License    │ ${daily_price:.2f}\n"
+                f"Monthly License  │ ${monthly_price:.2f}\n"
+                f"Lifetime License │ ${lifetime_price:.2f}\n"
+                "```"
+            ),
+            inline=False
         )
-        if category:
-            embed.add_field(name="📁 Category", value=category, inline=True)
         
-        embed.add_field(name="💳 Pricing", value=pricing_text, inline=False)
+        if category:
+            embed.add_field(
+                name="📁 Category",
+                value=f"`{category}`",
+                inline=True
+            )
         
         # Stock counter
         embed.add_field(
-            name="📦 Stock",
-            value="Keys Available: 0 (Use /addkey to add keys)",
+            name="📦 Stock Status",
+            value="```\nKeys Available: 0\nUse /addkey to add keys```",
             inline=True
         )
         
-        # Security and Support
+        # Security and Support in a code block
         embed.add_field(
-            name="🛡️ Security",
-            value="• Instant Delivery\n• 24/7 Support\n• Anti-Leak Protection",
-            inline=True
+            name="🛡️ Security & Support",
+            value=(
+                "```\n"
+                "✓ Instant Delivery\n"
+                "✓ 24/7 Support\n"
+                "✓ Anti-Leak Protection\n"
+                "✓ Automatic Updates\n"
+                "```"
+            ),
+            inline=False
         )
         
-        # Seller info
-        seller = interaction.guild.get_member(int(product_data['seller_id']))
-        embed.add_field(
-            name="👤 Seller Information",
-            value=f"Seller: {seller.mention}\nID: {product_id}",
-            inline=True
+        # Footer with IDs
+        embed.set_footer(
+            text=f"Product ID: {product_id} • Created: {discord.utils.format_dt(discord.utils.utcnow(), style='R')}"
         )
-        
-        embed.set_footer(text=f"Product ID: {product_id} • Created at {discord.utils.format_dt(discord.utils.utcnow())}")
         
         view = ProductPanel(str(product_id))
         await interaction.channel.send(embed=embed, view=view)
