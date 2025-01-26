@@ -11,14 +11,14 @@ class PaymentMethodSelect(discord.ui.Select):
             discord.SelectOption(
                 label="PayPal",
                 description="Pay with PayPal",
-                emoji="💳",
+                emoji="💰",
                 value="paypal"
             ),
             discord.SelectOption(
-                label="Bitcoin",
-                description="Pay with Bitcoin",
-                emoji="₿",
-                value="bitcoin"
+                label="Crypto",
+                description="Pay with Cryptocurrency",
+                emoji="💎",
+                value="crypto"
             ),
             discord.SelectOption(
                 label="Bank Transfer",
@@ -37,7 +37,7 @@ class PaymentMethodSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         payment_info = {
             "paypal": "PayPal Email: example@email.com",
-            "bitcoin": "BTC Address: bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+            "crypto": "Wallet Address: YOUR_WALLET_ADDRESS",
             "bank": "Bank Details: \nBank: Example Bank\nIBAN: XX00 0000 0000 0000"
         }
         
@@ -49,7 +49,7 @@ class PaymentMethodSelect(discord.ui.Select):
         embed.set_footer(text="After sending payment, click 'Confirm Payment' below")
         
         view = ConfirmPaymentView()
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
+        await interaction.response.send_message(embed=embed, view=view)
 
 class ConfirmPaymentView(discord.ui.View):
     def __init__(self):
@@ -169,18 +169,19 @@ class TicketManager(commands.Cog):
         
         ticket_id = await self.bot.db.create_ticket(ticket_data)
         
+        # Send initial ticket message
         embed = discord.Embed(
-            title="New Ticket",
+            title="🛍️ New Purchase Ticket",
             description=f"Product: {product['name']}\nPrice: ${product['price']}",
             color=discord.Color.green()
         )
-        
+        embed.add_field(name="Buyer", value=interaction.user.mention)
+        embed.add_field(name="Seller", value=seller.mention)
         await channel.send(embed=embed)
         
-        # Add payment method selector
-        view = discord.ui.View()
-        view.add_item(PaymentMethodSelect())
-        await channel.send("Please select your payment method:", view=view)
+        # Send payment method selector
+        payment_view = PaymentView()
+        await channel.send("Please select your payment method:", view=payment_view)
         
         await interaction.response.send_message(
             f"Ticket created! Please check {channel.mention}", 
@@ -212,6 +213,11 @@ class TicketManager(commands.Cog):
                     )
             
             await asyncio.sleep(3600)  # Check every hour
+
+class PaymentView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(PaymentMethodSelect())
 
 async def setup(bot):
     await bot.add_cog(TicketManager(bot)) 
