@@ -63,6 +63,10 @@ class Database:
         """Delete a product"""
         await self.products.delete_one({'_id': ObjectId(product_id)})
 
+    async def delete_product_keys(self, product_id):
+        """Delete all keys for a product"""
+        await self.keys.delete_many({'product_id': ObjectId(product_id)})
+
     async def get_product_by_name_and_seller(self, name: str, seller_id: str):
         """Get a product by name and seller ID"""
         return await self.products.find_one({
@@ -73,14 +77,12 @@ class Database:
     async def get_all_products(self):
         """Get all products (admin only)"""
         cursor = self.products.find()
-        products = await cursor.to_list(length=None)
-        return products
+        return await cursor.to_list(length=None)
 
     async def get_seller_products(self, seller_id: str):
         """Get products for a specific seller"""
         cursor = self.products.find({'seller_id': seller_id})
-        products = await cursor.to_list(length=None)
-        return products
+        return await cursor.to_list(length=None)
 
     # Key Methods
     async def add_product_key(self, data):
@@ -106,18 +108,15 @@ class Database:
             'is_used': False
         })
 
-    async def get_available_key_count(self, product_id):
+    async def get_available_key_count(self, product_id, license_type: str = None):
         """Get count of available keys for a product"""
-        return await self.keys.count_documents({
+        query = {
             'product_id': ObjectId(product_id),
             'is_used': False
-        })
-
-    async def get_product_key_count(self, product_id):
-        """Get total count of keys for a product"""
-        return await self.keys.count_documents({
-            'product_id': ObjectId(product_id)
-        })
+        }
+        if license_type:
+            query['license_type'] = license_type
+        return await self.keys.count_documents(query)
 
     async def get_keys_by_type(self, product_id, license_type: str):
         """Get all keys of a specific type for a product"""
@@ -182,8 +181,7 @@ class Database:
     async def get_reviews(self, seller_id: str):
         """Get all reviews for a seller"""
         cursor = self.reviews.find({'seller_id': seller_id}).sort('created_at', -1)
-        reviews = await cursor.to_list(length=None)
-        return reviews
+        return await cursor.to_list(length=None)
 
     async def close(self):
         """Close the database connection"""
@@ -211,13 +209,13 @@ class MarketplaceBot(commands.Bot):
         print("Setting up bot...")
         
         # Load all cogs
-        for filename in os.listdir('./cogs'):
-            if filename.endswith('.py'):
-                try:
-                    await self.load_extension(f'cogs.{filename[:-3]}')
-                    print(f'Loaded cog: {filename[:-3]}')
-                except Exception as e:
-                    print(f'Failed to load cog {filename}: {e}')
+        cogs = ['product_manager', 'ticket_manager', 'review_manager', 'help_manager']
+        for cog in cogs:
+            try:
+                await self.load_extension(f'cogs.{cog}')
+                print(f'Loaded cog: {cog}')
+            except Exception as e:
+                print(f'Failed to load cog {cog}: {e}')
 
     async def on_ready(self):
         """Called when bot is ready"""
@@ -229,7 +227,7 @@ class MarketplaceBot(commands.Bot):
         await self.change_presence(
             activity=discord.Activity(
                 type=discord.ActivityType.watching,
-                name=f"{self.config.PREFIX}help | Shadow"
+                name=f"{self.config.PREFIX}help | Marketplace"
             ),
             status=discord.Status.online
         )
