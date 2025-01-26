@@ -82,10 +82,16 @@ class ProductManager(commands.Cog):
                 inline=True
             )
         
-        # Stock counter
+        # Stock counter with emojis
+        stock_status = ""
+        for license_type in ['daily', 'monthly', 'lifetime']:
+            keys = await self.bot.db.get_available_key_count(product_id, license_type)
+            emoji = "🟢" if keys > 0 else "🔴"
+            stock_status += f"{emoji} {license_type.title()}: {keys}\n"
+
         embed.add_field(
             name="📦 Stock Status",
-            value="```\nKeys Available: 0\nUse /addkey to add keys```",
+            value=f"```\n{stock_status}```",
             inline=True
         )
         
@@ -338,10 +344,8 @@ class ProductManager(commands.Cog):
             return
         
         if is_admin:
-            # Admin can see all products
             products = await self.bot.db.get_all_products()
         else:
-            # Sellers can only see their products
             products = await self.bot.db.get_seller_products(str(interaction.user.id))
         
         if not products:
@@ -362,8 +366,22 @@ class ProductManager(commands.Cog):
             seller = interaction.guild.get_member(int(product['seller_id']))
             seller_name = seller.display_name if seller else "Unknown Seller"
             
+            # Format prices
+            prices = "\n".join([
+                f"{type_.title()}: ${price:.2f}"
+                for type_, price in product['prices'].items()
+            ])
+            
+            # Get stock info
+            stock_info = ""
+            for license_type in ['daily', 'monthly', 'lifetime']:
+                keys = await self.bot.db.get_available_key_count(product['_id'], license_type)
+                emoji = "🟢" if keys > 0 else "🔴"
+                stock_info += f"{emoji} {license_type.title()}: {keys}\n"
+            
             value = (
-                f"💰 Price: ${product['price']:.2f}\n"
+                f"💰 Prices:\n{prices}\n\n"
+                f"📦 Stock:\n{stock_info}\n"
                 f"📁 Category: {product.get('category', 'N/A')}\n"
                 f"👤 Seller: {seller_name}\n"
                 f"🆔 ID: `{product['_id']}`"
@@ -376,7 +394,6 @@ class ProductManager(commands.Cog):
             )
             field_count += 1
             
-            # Discord embeds can only have 25 fields
             if field_count == 25:
                 embeds.append(current_embed)
                 current_embed = discord.Embed(
@@ -391,9 +408,7 @@ class ProductManager(commands.Cog):
         if len(embeds) == 1:
             await interaction.response.send_message(embed=embeds[0], ephemeral=True)
         else:
-            # Send first embed with the initial response
             await interaction.response.send_message(embed=embeds[0], ephemeral=True)
-            # Send additional embeds as follow-up messages
             for embed in embeds[1:]:
                 await interaction.followup.send(embed=embed, ephemeral=True)
 
