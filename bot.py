@@ -59,6 +59,10 @@ class Database:
         """Get a product by ID"""
         return await self.products.find_one({'_id': ObjectId(product_id)})
 
+    async def delete_product(self, product_id):
+        """Delete a product"""
+        await self.products.delete_one({'_id': ObjectId(product_id)})
+
     async def get_all_products(self):
         """Get all products (admin only)"""
         cursor = self.products.find()
@@ -102,6 +106,14 @@ class Database:
             {'_id': ObjectId(ticket_id)},
             {'$set': update_data}
         )
+
+    async def get_user_active_tickets(self, user_id: str):
+        """Get active tickets for a user"""
+        cursor = self.tickets.find({
+            'buyer_id': user_id,
+            'status': 'open'
+        })
+        return await cursor.to_list(length=None)
 
     # Review Methods
     async def create_review(self, data):
