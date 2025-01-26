@@ -3,6 +3,8 @@ from discord.ext import commands
 import asyncio
 import os
 from datetime import datetime
+from motor.motor_asyncio import AsyncIOMotorClient  # Add this import
+from bson import ObjectId  # Add this import too
 
 class Config:
     def __init__(self):
