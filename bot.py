@@ -63,6 +63,13 @@ class Database:
         """Delete a product"""
         await self.products.delete_one({'_id': ObjectId(product_id)})
 
+    async def get_product_by_name_and_seller(self, name: str, seller_id: str):
+        """Get a product by name and seller ID"""
+        return await self.products.find_one({
+            'name': name,
+            'seller_id': seller_id
+        })
+
     async def get_all_products(self):
         """Get all products (admin only)"""
         cursor = self.products.find()
@@ -74,6 +81,30 @@ class Database:
         cursor = self.products.find({'seller_id': seller_id})
         products = await cursor.to_list(length=None)
         return products
+
+    # Key Methods
+    async def add_product_key(self, data):
+        """Add a new product key"""
+        data['created_at'] = datetime.now(timezone.utc)
+        data['is_used'] = False
+        result = await self.keys.insert_one(data)
+        return result.inserted_id
+
+    async def get_key(self, key_id):
+        """Get a key by ID"""
+        return await self.keys.find_one({'_id': ObjectId(key_id)})
+
+    async def delete_key(self, key_id):
+        """Delete a key"""
+        await self.keys.delete_one({'_id': ObjectId(key_id)})
+
+    async def get_available_key(self, product_id, license_type: str):
+        """Get an unused key for a product and license type"""
+        return await self.keys.find_one({
+            'product_id': ObjectId(product_id),
+            'license_type': license_type,
+            'is_used': False
+        })
 
     async def get_available_key_count(self, product_id):
         """Get count of available keys for a product"""
@@ -87,6 +118,32 @@ class Database:
         return await self.keys.count_documents({
             'product_id': ObjectId(product_id)
         })
+
+    async def get_keys_by_type(self, product_id, license_type: str):
+        """Get all keys of a specific type for a product"""
+        cursor = self.keys.find({
+            'product_id': ObjectId(product_id),
+            'license_type': license_type
+        })
+        return await cursor.to_list(length=None)
+
+    async def get_product_keys(self, product_id):
+        """Get all keys for a product"""
+        cursor = self.keys.find({'product_id': ObjectId(product_id)})
+        return await cursor.to_list(length=None)
+
+    async def mark_key_as_used(self, key_id, buyer_id: str):
+        """Mark a key as used"""
+        await self.keys.update_one(
+            {'_id': ObjectId(key_id)},
+            {
+                '$set': {
+                    'is_used': True,
+                    'used_by': buyer_id,
+                    'used_at': datetime.now(timezone.utc)
+                }
+            }
+        )
 
     # Ticket Methods
     async def create_ticket(self, data):
@@ -127,34 +184,6 @@ class Database:
         cursor = self.reviews.find({'seller_id': seller_id}).sort('created_at', -1)
         reviews = await cursor.to_list(length=None)
         return reviews
-
-    # Key Methods
-    async def add_product_key(self, data):
-        """Add a new product key"""
-        data['created_at'] = datetime.now(timezone.utc)
-        data['is_used'] = False
-        result = await self.keys.insert_one(data)
-        return result.inserted_id
-
-    async def get_available_key(self, product_id):
-        """Get an unused key for a product"""
-        return await self.keys.find_one({
-            'product_id': ObjectId(product_id),
-            'is_used': False
-        })
-
-    async def mark_key_as_used(self, key_id, buyer_id: str):
-        """Mark a key as used"""
-        await self.keys.update_one(
-            {'_id': ObjectId(key_id)},
-            {
-                '$set': {
-                    'is_used': True,
-                    'used_by': buyer_id,
-                    'used_at': datetime.now(timezone.utc)
-                }
-            }
-        )
 
     async def close(self):
         """Close the database connection"""
@@ -200,7 +229,7 @@ class MarketplaceBot(commands.Bot):
         await self.change_presence(
             activity=discord.Activity(
                 type=discord.ActivityType.watching,
-                name=f"{self.config.PREFIX}help | Marketplace"
+                name=f"{self.config.PREFIX}help | Shadow"
             ),
             status=discord.Status.online
         )
