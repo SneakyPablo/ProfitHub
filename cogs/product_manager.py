@@ -333,84 +333,98 @@ class ProductManager(commands.Cog):
     @app_commands.command(name="products")
     async def list_products(self, interaction: discord.Interaction):
         """List all products you have access to view"""
-        is_seller = interaction.guild.get_role(self.bot.config.SELLER_ROLE_ID) in interaction.user.roles
-        is_admin = interaction.guild.get_role(self.bot.config.ADMIN_ROLE_ID) in interaction.user.roles
-        
-        if not (is_seller or is_admin):
-            await interaction.response.send_message(
-                "You need to be a seller or admin to use this command!", 
-                ephemeral=True
-            )
-            return
-        
-        if is_admin:
-            products = await self.bot.db.get_all_products()
-        else:
-            products = await self.bot.db.get_seller_products(str(interaction.user.id))
-        
-        if not products:
-            await interaction.response.send_message(
-                "No products found.", 
-                ephemeral=True
-            )
-            return
-        
-        embeds = []
-        current_embed = discord.Embed(
-            title="🏪 Product List",
-            color=discord.Color.blue()
-        )
-        field_count = 0
-        
-        for product in products:
-            seller = interaction.guild.get_member(int(product['seller_id']))
-            seller_name = seller.display_name if seller else "Unknown Seller"
+        try:
+            is_seller = interaction.guild.get_role(self.bot.config.SELLER_ROLE_ID) in interaction.user.roles
+            is_admin = interaction.guild.get_role(self.bot.config.ADMIN_ROLE_ID) in interaction.user.roles
             
-            # Format prices
-            prices = "\n".join([
-                f"{type_.title()}: ${price:.2f}"
-                for type_, price in product['prices'].items()
-            ])
-            
-            # Get stock info
-            stock_info = ""
-            for license_type in ['daily', 'monthly', 'lifetime']:
-                keys = await self.bot.db.get_available_key_count(product['_id'], license_type)
-                emoji = "🟢" if keys > 0 else "🔴"
-                stock_info += f"{emoji} {license_type.title()}: {keys}\n"
-            
-            value = (
-                f"💰 Prices:\n{prices}\n\n"
-                f"📦 Stock:\n{stock_info}\n"
-                f"📁 Category: {product.get('category', 'N/A')}\n"
-                f"👤 Seller: {seller_name}\n"
-                f"🆔 ID: `{product['_id']}`"
-            )
-            
-            current_embed.add_field(
-                name=f"📦 {product['name']}",
-                value=value,
-                inline=False
-            )
-            field_count += 1
-            
-            if field_count == 25:
-                embeds.append(current_embed)
-                current_embed = discord.Embed(
-                    title="🏪 Product List (Continued)",
-                    color=discord.Color.blue()
+            if not (is_seller or is_admin):
+                await interaction.response.send_message(
+                    "You need to be a seller or admin to use this command!", 
+                    ephemeral=True
                 )
-                field_count = 0
-        
-        if field_count > 0:
-            embeds.append(current_embed)
-        
-        if len(embeds) == 1:
-            await interaction.response.send_message(embed=embeds[0], ephemeral=True)
-        else:
+                return
+            
+            products = await self.bot.db.get_all_products() if is_admin else await self.bot.db.get_seller_products(str(interaction.user.id))
+            
+            if not products:
+                await interaction.response.send_message("No products found.", ephemeral=True)
+                return
+            
+            embeds = []
+            current_embed = discord.Embed(title="🏪 Product List", color=discord.Color.blue())
+            field_count = 0
+            
+            for product in products:
+                try:
+                    seller = interaction.guild.get_member(int(product['seller_id']))
+                    seller_name = seller.display_name if seller else "Unknown Seller"
+                    
+                    # Handle both old and new price formats
+                    prices = ""
+                    if 'prices' in product:
+                        prices = "\n".join([
+                            f"{type_.title()}: ${price:.2f}"
+                            for type_, price in product['prices'].items()
+                        ])
+                    elif 'price' in product:
+                        prices = f"${product['price']:.2f}"
+                    else:
+                        prices = "Price not set"
+                    
+                    # Get stock info
+                    stock_info = ""
+                    for license_type in ['daily', 'monthly', 'lifetime']:
+                        try:
+                            keys = await self.bot.db.get_available_key_count(product['_id'], license_type)
+                            emoji = "🟢" if keys > 0 else "🔴"
+                            stock_info += f"{emoji} {license_type.title()}: {keys}\n"
+                        except Exception:
+                            continue
+                    
+                    value = (
+                        f"💰 Prices:\n{prices}\n\n"
+                        f"📦 Stock:\n{stock_info}\n"
+                        f"📁 Category: {product.get('category', 'N/A')}\n"
+                        f"👤 Seller: {seller_name}\n"
+                        f"🆔 ID: `{product['_id']}`"
+                    )
+                    
+                    current_embed.add_field(
+                        name=f"📦 {product['name']}",
+                        value=value,
+                        inline=False
+                    )
+                    field_count += 1
+                    
+                    if field_count == 25:
+                        embeds.append(current_embed)
+                        current_embed = discord.Embed(
+                            title="🏪 Product List (Continued)",
+                            color=discord.Color.blue()
+                        )
+                        field_count = 0
+                    
+                except Exception as e:
+                    print(f"Error processing product {product.get('_id')}: {e}")
+                    continue
+            
+            if field_count > 0:
+                embeds.append(current_embed)
+            
+            if not embeds:
+                await interaction.response.send_message("No valid products found.", ephemeral=True)
+                return
+            
             await interaction.response.send_message(embed=embeds[0], ephemeral=True)
             for embed in embeds[1:]:
                 await interaction.followup.send(embed=embed, ephemeral=True)
+            
+        except Exception as e:
+            await interaction.response.send_message(
+                f"An error occurred while listing products. Please try again later.", 
+                ephemeral=True
+            )
+            print(f"Error in products command: {e}")
 
     @app_commands.command(name="deletepanel")
     @is_seller()
