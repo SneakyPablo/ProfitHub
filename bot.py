@@ -15,6 +15,11 @@ class Config:
         self.ADMIN_ROLE_ID = int(os.environ.get('ADMIN_ROLE_ID', 0))
         self.SELLER_ROLE_ID = int(os.environ.get('SELLER_ROLE_ID', 0))
         self.AUTO_CLOSE_HOURS = int(os.environ.get('AUTO_CLOSE_HOURS', 48))
+        self.PAYMENT_INFO = {
+            'paypal': os.environ.get('PAYPAL_EMAIL', 'example@email.com'),
+            'crypto': os.environ.get('CRYPTO_WALLET', 'YOUR_WALLET_ADDRESS'),
+            'bank': os.environ.get('BANK_DETAILS', 'Bank: Example Bank\nIBAN: XX00 0000 0000 0000')
+        }
 
     def validate(self):
         """Validate required configuration"""
@@ -65,6 +70,19 @@ class Database:
         cursor = self.products.find({'seller_id': seller_id})
         products = await cursor.to_list(length=None)
         return products
+
+    async def get_available_key_count(self, product_id):
+        """Get count of available keys for a product"""
+        return await self.keys.count_documents({
+            'product_id': ObjectId(product_id),
+            'is_used': False
+        })
+
+    async def get_product_key_count(self, product_id):
+        """Get total count of keys for a product"""
+        return await self.keys.count_documents({
+            'product_id': ObjectId(product_id)
+        })
 
     # Ticket Methods
     async def create_ticket(self, data):
@@ -141,13 +159,16 @@ class MarketplaceBot(commands.Bot):
         
         super().__init__(
             command_prefix=self.config.PREFIX,
-            intents=intents
+            intents=intents,
+            description="Marketplace Bot with ticket system and product management"
         )
         
         self.db = Database()
 
     async def setup_hook(self):
         """Set up bot and load cogs"""
+        print("Setting up bot...")
+        
         # Load all cogs
         for filename in os.listdir('./cogs'):
             if filename.endswith('.py'):
@@ -160,13 +181,16 @@ class MarketplaceBot(commands.Bot):
     async def on_ready(self):
         """Called when bot is ready"""
         print(f'Logged in as {self.user.name}')
+        print(f'Bot ID: {self.user.id}')
+        print('------')
         
         # Set bot status
         await self.change_presence(
             activity=discord.Activity(
                 type=discord.ActivityType.watching,
                 name=f"{self.config.PREFIX}help | Marketplace"
-            )
+            ),
+            status=discord.Status.online
         )
         
         # Sync commands
@@ -182,11 +206,14 @@ class MarketplaceBot(commands.Bot):
             return
         elif isinstance(error, commands.MissingPermissions):
             await ctx.send("You don't have permission to use this command!")
+        elif isinstance(error, commands.MissingRole):
+            await ctx.send(f"You need the required role to use this command!")
         else:
             print(f'Error in command {ctx.command}: {error}')
 
     async def close(self):
         """Cleanup when bot shuts down"""
+        print("Bot is shutting down...")
         await self.db.close()
         await super().close()
 
@@ -194,6 +221,7 @@ def run_bot():
     """Initialize and run the bot"""
     try:
         bot = MarketplaceBot()
+        print("Starting bot...")
         bot.run(bot.config.TOKEN)
     except Exception as e:
         print(f"Failed to start bot: {e}")
