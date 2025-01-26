@@ -397,6 +397,57 @@ class ProductManager(commands.Cog):
             for embed in embeds[1:]:
                 await interaction.followup.send(embed=embed, ephemeral=True)
 
+    @app_commands.command(name="deletepanel")
+    @is_seller()
+    async def deletepanel(self, interaction: discord.Interaction, product_id: str):
+        """Delete a product panel"""
+        try:
+            # Get product and verify ownership
+            product = await self.bot.db.get_product(ObjectId(product_id))
+            if not product:
+                await interaction.response.send_message(
+                    "Product not found! Make sure the ID is correct.", 
+                    ephemeral=True
+                )
+                return
+            
+            if product['seller_id'] != str(interaction.user.id):
+                await interaction.response.send_message(
+                    "You don't own this product!", 
+                    ephemeral=True
+                )
+                return
+
+            # Find and delete the panel message
+            found = False
+            async for message in interaction.channel.history(limit=100):
+                if message.author == self.bot.user and len(message.embeds) > 0:
+                    embed = message.embeds[0]
+                    if str(product_id) in embed.footer.text:
+                        await message.delete()
+                        found = True
+                        break
+            
+            # Delete product and associated keys from database
+            await self.bot.db.delete_product(ObjectId(product_id))
+            await self.bot.db.delete_product_keys(ObjectId(product_id))
+            
+            if found:
+                await interaction.response.send_message(
+                    "Product panel and associated data deleted successfully!", 
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "Product data deleted, but couldn't find the panel message.", 
+                    ephemeral=True
+                )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"Error deleting panel: Invalid product ID format", 
+                ephemeral=True
+            )
+
 class ProductPanel(discord.ui.View):
     def __init__(self, product_id: str):
         super().__init__(timeout=None)
