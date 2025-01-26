@@ -111,7 +111,15 @@ class ProductManager(commands.Cog):
     @app_commands.command(name="products")
     async def list_products(self, interaction: discord.Interaction):
         """List all products you have access to view"""
+        is_seller = interaction.guild.get_role(self.bot.config.SELLER_ROLE_ID) in interaction.user.roles
         is_admin = interaction.guild.get_role(self.bot.config.ADMIN_ROLE_ID) in interaction.user.roles
+        
+        if not (is_seller or is_admin):
+            await interaction.response.send_message(
+                "You need to be a seller or admin to use this command!", 
+                ephemeral=True
+            )
+            return
         
         if is_admin:
             # Admin can see all products
@@ -127,29 +135,51 @@ class ProductManager(commands.Cog):
             )
             return
         
-        embed = discord.Embed(
+        embeds = []
+        current_embed = discord.Embed(
             title="🏪 Product List",
             color=discord.Color.blue()
         )
+        field_count = 0
         
         for product in products:
             seller = interaction.guild.get_member(int(product['seller_id']))
             seller_name = seller.display_name if seller else "Unknown Seller"
             
             value = (
-                f"Price: ${product['price']:.2f}\n"
-                f"Category: {product.get('category', 'N/A')}\n"
-                f"Seller: {seller_name}\n"
-                f"ID: `{product['_id']}`"
+                f"💰 Price: ${product['price']:.2f}\n"
+                f"📁 Category: {product.get('category', 'N/A')}\n"
+                f"👤 Seller: {seller_name}\n"
+                f"🆔 ID: `{product['_id']}`"
             )
             
-            embed.add_field(
+            current_embed.add_field(
                 name=f"📦 {product['name']}",
                 value=value,
                 inline=False
             )
+            field_count += 1
+            
+            # Discord embeds can only have 25 fields
+            if field_count == 25:
+                embeds.append(current_embed)
+                current_embed = discord.Embed(
+                    title="🏪 Product List (Continued)",
+                    color=discord.Color.blue()
+                )
+                field_count = 0
         
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        if field_count > 0:
+            embeds.append(current_embed)
+        
+        if len(embeds) == 1:
+            await interaction.response.send_message(embed=embeds[0], ephemeral=True)
+        else:
+            # Send first embed with the initial response
+            await interaction.response.send_message(embed=embeds[0], ephemeral=True)
+            # Send additional embeds as follow-up messages
+            for embed in embeds[1:]:
+                await interaction.followup.send(embed=embed, ephemeral=True)
 
 class ProductPanel(discord.ui.View):
     def __init__(self, product_id: str):
