@@ -31,10 +31,15 @@ class PaymentMethodSelect(discord.ui.Select):
             placeholder="Select payment method...",
             min_values=1,
             max_values=1,
-            options=options
+            options=options,
+            disabled=False  # Will be disabled after selection
         )
 
     async def callback(self, interaction: discord.Interaction):
+        # Disable the select menu after first use
+        self.disabled = True
+        self.view.children[0].disabled = True  # Disable select menu
+        
         payment_info = {
             "paypal": "PayPal Email: example@email.com",
             "crypto": "Wallet Address: YOUR_WALLET_ADDRESS",
@@ -49,7 +54,8 @@ class PaymentMethodSelect(discord.ui.Select):
         embed.set_footer(text="After sending payment, click 'Confirm Payment' below")
         
         view = ConfirmPaymentView()
-        await interaction.response.send_message(embed=embed, view=view)
+        await interaction.response.edit_message(view=self.view)  # Update original message to show disabled select
+        await interaction.followup.send(embed=embed, view=view)
 
 class ConfirmPaymentView(discord.ui.View):
     def __init__(self):
@@ -87,11 +93,14 @@ class SellerConfirmationView(discord.ui.View):
     async def confirm_and_deliver(self, interaction: discord.Interaction, button: discord.ui.Button):
         ticket = await interaction.client.db.get_ticket_by_channel(str(interaction.channel.id))
         
-        # Get an available key
-        key = await interaction.client.db.get_available_key(ticket['product_id'])
+        # Get an available key for the specific license type
+        key = await interaction.client.db.get_available_key(
+            ticket['product_id'], 
+            ticket['license_type']
+        )
         if not key:
             await interaction.response.send_message(
-                "Error: No available keys for this product!", 
+                "Error: No available keys for this product type!", 
                 ephemeral=True
             )
             return
