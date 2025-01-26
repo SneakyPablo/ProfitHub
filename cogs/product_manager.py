@@ -24,15 +24,29 @@ class ProductManager(commands.Cog):
 
     @app_commands.command(name="createpanel")
     @is_seller()
-    async def createpanel(self, interaction: discord.Interaction, name: str, price: float, 
+    async def createpanel(self, interaction: discord.Interaction, name: str, 
+                         daily_price: float, monthly_price: float, lifetime_price: float,
                          description: str, category: str = None):
         product_data = {
             'name': name,
             'description': description,
-            'price': price,
+            'prices': {
+                'daily': daily_price,
+                'monthly': monthly_price,
+                'lifetime': lifetime_price
+            },
             'seller_id': str(interaction.user.id),
             'category': category
         }
+        
+        # Check if there are any keys in stock
+        keys = await self.bot.db.get_product_key_count(ObjectId(product_id))
+        if keys == 0:
+            await interaction.response.send_message(
+                "You need to add keys before creating a panel! Use /addkey to add keys.", 
+                ephemeral=True
+            )
+            return
         
         product_id = await self.bot.db.create_product(product_data)
         
@@ -54,11 +68,24 @@ class ProductManager(commands.Cog):
         )
         
         # Pricing section
-        pricing_text = f"💰 **Monthly License** : ${price:.2f}\n"
+        pricing_text = (
+            f"💰 **License Prices**\n"
+            f"Daily: ${daily_price:.2f}\n"
+            f"Monthly: ${monthly_price:.2f}\n"
+            f"Lifetime: ${lifetime_price:.2f}"
+        )
         if category:
             embed.add_field(name="📁 Category", value=category, inline=True)
         
         embed.add_field(name="💳 Pricing", value=pricing_text, inline=False)
+        
+        # Stock counter
+        keys_available = await self.bot.db.get_available_key_count(ObjectId(product_id))
+        embed.add_field(
+            name="📦 Stock",
+            value=f"Keys Available: {keys_available}",
+            inline=True
+        )
         
         # Security and Support
         embed.add_field(
@@ -75,7 +102,6 @@ class ProductManager(commands.Cog):
             inline=True
         )
         
-        # Footer
         embed.set_footer(text=f"Product ID: {product_id} • Created at {discord.utils.format_dt(discord.utils.utcnow())}")
         
         view = ProductPanel(str(product_id))
@@ -186,17 +212,33 @@ class ProductPanel(discord.ui.View):
         super().__init__(timeout=None)
         self.product_id = product_id
 
-    @discord.ui.button(label="Buy Now", style=discord.ButtonStyle.success)
-    async def buy_now(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Get the ticket manager cog
-        ticket_manager = interaction.client.get_cog('TicketManager')
-        if ticket_manager:
-            await ticket_manager.create_ticket(interaction, self.product_id)
-        else:
+    async def check_stock(self, interaction: discord.Interaction):
+        keys_available = await interaction.client.db.get_available_key_count(ObjectId(self.product_id))
+        if keys_available == 0:
             await interaction.response.send_message(
-                "Error: Ticket system is not available.", 
+                "Sorry, this product is currently out of stock!", 
                 ephemeral=True
             )
+            return False
+        return True
+
+    @discord.ui.button(label="Buy Daily", style=discord.ButtonStyle.success)
+    async def buy_daily(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.check_stock(interaction):
+            return
+        await self.create_purchase_ticket(interaction, "daily")
+
+    @discord.ui.button(label="Buy Monthly", style=discord.ButtonStyle.success)
+    async def buy_monthly(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.check_stock(interaction):
+            return
+        await self.create_purchase_ticket(interaction, "monthly")
+
+    @discord.ui.button(label="Buy Lifetime", style=discord.ButtonStyle.success)
+    async def buy_lifetime(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.check_stock(interaction):
+            return
+        await self.create_purchase_ticket(interaction, "lifetime")
 
     @discord.ui.button(label="Request Info", style=discord.ButtonStyle.primary)
     async def request_info(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -208,18 +250,27 @@ class ProductPanel(discord.ui.View):
                     description=product['description'],
                     color=discord.Color.blue()
                 )
-                embed.add_field(name="Price", value=f"${product['price']}")
+                for license_type, price in product['prices'].items():
+                    embed.add_field(name=f"{license_type.title()} Price", value=f"${price}")
                 if product.get('category'):
                     embed.add_field(name="Category", value=product['category'])
+                
+                keys_available = await interaction.client.db.get_available_key_count(ObjectId(self.product_id))
+                embed.add_field(name="Stock", value=f"{keys_available} keys available")
+                
                 await interaction.response.send_message(embed=embed, ephemeral=True)
             else:
-                await interaction.response.send_message(
-                    "Product not found!", 
-                    ephemeral=True
-                )
+                await interaction.response.send_message("Product not found!", ephemeral=True)
         except Exception as e:
+            await interaction.response.send_message("Error fetching product information.", ephemeral=True)
+
+    async def create_purchase_ticket(self, interaction: discord.Interaction, license_type: str):
+        ticket_manager = interaction.client.get_cog('TicketManager')
+        if ticket_manager:
+            await ticket_manager.create_ticket(interaction, self.product_id, license_type)
+        else:
             await interaction.response.send_message(
-                "Error fetching product information.", 
+                "Error: Ticket system is not available.", 
                 ephemeral=True
             )
 
