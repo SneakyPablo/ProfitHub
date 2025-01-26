@@ -8,6 +8,9 @@ import os
 class MarketplaceBot(commands.Bot):
     def __init__(self):
         self.config = Config()
+        # Validate config before starting the bot
+        self.config.validate()
+        
         intents = discord.Intents.default()
         intents.message_content = True
         intents.members = True
