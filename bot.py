@@ -2,9 +2,9 @@ import discord
 from discord.ext import commands
 import asyncio
 import os
-from datetime import datetime
-from motor.motor_asyncio import AsyncIOMotorClient  # Add this import
-from bson import ObjectId  # Add this import
+from datetime import datetime, timezone
+from motor.motor_asyncio import AsyncIOMotorClient
+from bson import ObjectId
 
 class Config:
     def __init__(self):
@@ -46,7 +46,7 @@ class Database:
     # Product Methods
     async def create_product(self, data):
         """Create a new product"""
-        data['created_at'] = datetime.utcnow()
+        data['created_at'] = datetime.now(timezone.utc)
         result = await self.products.insert_one(data)
         return result.inserted_id
 
@@ -69,7 +69,7 @@ class Database:
     # Ticket Methods
     async def create_ticket(self, data):
         """Create a new ticket"""
-        data['created_at'] = datetime.utcnow()
+        data['created_at'] = datetime.now(timezone.utc)
         result = await self.tickets.insert_one(data)
         return result.inserted_id
 
@@ -79,6 +79,7 @@ class Database:
 
     async def update_ticket(self, ticket_id, update_data):
         """Update ticket status"""
+        update_data['updated_at'] = datetime.now(timezone.utc)
         await self.tickets.update_one(
             {'_id': ObjectId(ticket_id)},
             {'$set': update_data}
@@ -87,7 +88,7 @@ class Database:
     # Review Methods
     async def create_review(self, data):
         """Create a new review"""
-        data['created_at'] = datetime.utcnow()
+        data['created_at'] = datetime.now(timezone.utc)
         result = await self.reviews.insert_one(data)
         return result.inserted_id
 
@@ -100,7 +101,7 @@ class Database:
     # Key Methods
     async def add_product_key(self, data):
         """Add a new product key"""
-        data['created_at'] = datetime.utcnow()
+        data['created_at'] = datetime.now(timezone.utc)
         data['is_used'] = False
         result = await self.keys.insert_one(data)
         return result.inserted_id
@@ -120,7 +121,7 @@ class Database:
                 '$set': {
                     'is_used': True,
                     'used_by': buyer_id,
-                    'used_at': datetime.utcnow()
+                    'used_at': datetime.now(timezone.utc)
                 }
             }
         )
