@@ -1,5 +1,5 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 from bson import ObjectId
 
@@ -149,4 +149,31 @@ class Database:
     async def get_ticket_messages(self, ticket_id):
         """Get all messages for a ticket"""
         cursor = self.messages.find({'ticket_id': ticket_id}).sort('created_at', 1)
+        return await cursor.to_list(length=None)
+
+    async def get_ticket_stats(self):
+        """Get ticket statistics"""
+        total = await self.tickets.count_documents({})
+        open_tickets = await self.tickets.count_documents({'status': 'open'})
+        closed_today = await self.tickets.count_documents({
+            'status': 'closed',
+            'closed_at': {'$gte': datetime.utcnow() - timedelta(days=1)}
+        })
+        vouched = await self.tickets.count_documents({'vouched': True})
+        
+        return {
+            'total': total,
+            'open': open_tickets,
+            'closed_today': closed_today,
+            'vouched': vouched
+        }
+
+    async def get_user_tickets(self, user_id: str):
+        """Get all tickets for a user"""
+        cursor = self.tickets.find({
+            '$or': [
+                {'buyer_id': user_id},
+                {'seller_id': user_id}
+            ]
+        }).sort('created_at', -1)
         return await cursor.to_list(length=None) 
