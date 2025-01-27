@@ -14,6 +14,7 @@ class Config:
         self.BUYER_ROLE_ID = int(os.environ.get('BUYER_ROLE_ID', 0))
         self.BOT_LOGS_CHANNEL_ID = int(os.environ.get('BOT_LOGS_CHANNEL_ID', 0))
         self.TRANSCRIPTS_CHANNEL_ID = int(os.environ.get('TRANSCRIPTS_CHANNEL_ID', 0))
+        self.REVIEWS_CHANNEL_ID = int(os.environ.get('REVIEWS_CHANNEL_ID', 0))
         
         # Bot settings
         self.EMBED_COLOR = Color.blue()  # Default color for embeds
@@ -41,4 +42,6 @@ class Config:
         if not self.BOT_LOGS_CHANNEL_ID:
             raise ValueError("BOT_LOGS_CHANNEL_ID environment variable not set")
         if not self.TRANSCRIPTS_CHANNEL_ID:
-            raise ValueError("TRANSCRIPTS_CHANNEL_ID environment variable not set") 
+            raise ValueError("TRANSCRIPTS_CHANNEL_ID environment variable not set")
+        if not self.REVIEWS_CHANNEL_ID:
+            raise ValueError("REVIEWS_CHANNEL_ID environment variable not set") 
