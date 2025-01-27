@@ -148,47 +148,38 @@ class ProductManager(commands.GroupCog, name="product"):
             
             # Create panel embed
             embed = discord.Embed(
-                title=f"🌟 {name}",
+                title=f"🎉 {name}",
                 description=(
-                    f"A premium product by {interaction.user.mention}\n"
-                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    f"A premium product by {interaction.user.mention}\n\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 ),
-                color=0xf1c40f  # Golden color
+                color=0x2ecc71  # Nice green color
             )
 
-            # Format features with custom emojis
+            # Format features with better emojis and formatting
             features_text = ""
-            emojis = ["⭐", "💫", "🔥", "⚡", "💎"]
-            for i, (emoji, feature) in enumerate(zip(emojis, features), 1):
-                features_text += f"{emoji} **{feature}**\n"
+            feature_emojis = ["🌟", "🔧", "🚀", "💎", "⚡"]
+            for emoji, feature in zip(feature_emojis, features):
+                features_text += f"{emoji} {feature}\n"
 
             embed.add_field(
-                name="🔒 Product Features",
+                name="✨ Features",
                 value=features_text + "\n",
                 inline=False
             )
 
-            # Add pricing with better formatting
+            # Add pricing with clean formatting
             embed.add_field(
-                name="💰 License Pricing",
+                name="💳 Pricing",
                 value=(
-                    "```\n"
-                    f"Daily License    │ ${daily_price:.2f}\n"
-                    f"Monthly License  │ ${monthly_price:.2f}\n"
-                    f"Lifetime License │ ${lifetime_price:.2f}\n"
-                    "```\n"
+                    f"Daily License • ${daily_price:.2f}\n"
+                    f"Monthly License • ${monthly_price:.2f}\n"
+                    f"Lifetime License • ${lifetime_price:.2f}\n\n"
                 ),
                 inline=False
             )
 
-            # Add category and stock status
-            if category:
-                embed.add_field(
-                    name="📁 Category",
-                    value=f"```{category}```",
-                    inline=True
-                )
-
+            # Add stock status
             stock_status = ""
             for license_type in ['daily', 'monthly', 'lifetime']:
                 keys = await self.bot.db.get_available_key_count(product_id, license_type)
@@ -197,29 +188,43 @@ class ProductManager(commands.GroupCog, name="product"):
 
             embed.add_field(
                 name="📦 Stock Status",
-                value=f"```\n{stock_status}```",
-                inline=True
+                value=stock_status + "\n",
+                inline=False
             )
 
-            # Add security features
+            # Add security features with better formatting
             embed.add_field(
                 name="🛡️ Security & Support",
                 value=(
-                    "```\n"
-                    "✓ Instant Delivery\n"
-                    "✓ 24/7 Support\n"
-                    "✓ Anti-Leak Protection\n"
-                    "✓ Automatic Updates\n"
-                    "```"
+                    "✅ Instant Delivery\n"
+                    "✅ 24/7 Customer Support\n"
+                    "✅ Anti-Leak Protection\n"
+                    "✅ Free Automatic Updates\n\n"
                 ),
                 inline=False
             )
 
-            # Add spacer field for better button alignment
-            embed.add_field(name="", value="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", inline=False)
+            if category:
+                embed.add_field(
+                    name="📁 Category",
+                    value=category,
+                    inline=True
+                )
 
-            embed.set_footer(text=f"Product ID: {product_id}")
-            
+            # Add product ID at the bottom
+            embed.add_field(
+                name="🆔 Product ID",
+                value=f"`{product_id}`",
+                inline=True
+            )
+
+            # Add bottom border
+            embed.add_field(
+                name="",
+                value="━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                inline=False
+            )
+
             # Create and send panel
             view = ProductPanel(str(product_id))
             await interaction.channel.send(embed=embed, view=view)
