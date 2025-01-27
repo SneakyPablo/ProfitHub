@@ -16,9 +16,12 @@ class Config:
         self.EMBED_COLOR = Color.blue()  # Default color for embeds
         self.AUTO_CLOSE_HOURS = int(os.environ.get('AUTO_CLOSE_HOURS', 48))  # Default 48 hours
         
-        # Chat history settings
-        self.SAVE_CHAT_HISTORY = True  # Enable chat history saving
-        self.MAX_TRANSCRIPT_LENGTH = 4000  # Maximum length for embed transcript
+        # Payment information
+        self.PAYMENT_INFO = {
+            'paypal': os.environ.get('PAYPAL_EMAIL', 'example@email.com'),
+            'crypto': os.environ.get('CRYPTO_WALLET', 'YOUR_WALLET_ADDRESS'),
+            'bank': os.environ.get('BANK_DETAILS', 'Bank: Example Bank\nIBAN: XX00 0000 0000 0000')
+        }
 
     def validate(self):
         """Validate required configuration"""
@@ -29,4 +32,4 @@ class Config:
         if not self.ADMIN_ROLE_ID:
             raise ValueError("ADMIN_ROLE_ID environment variable not set")
         if not self.SELLER_ROLE_ID:
-            raise ValueError("SELLER_ROLE_ID environment variable not set")
+            raise ValueError("SELLER_ROLE_ID environment variable not set") 
