@@ -197,10 +197,11 @@ class SellerConfirmationView(discord.ui.View):
         
         await interaction.channel.delete()
 
-class TicketManager(commands.Cog):
+class TicketManager(commands.GroupCog, name="ticket"):
     def __init__(self, bot):
         self.bot = bot
         self.active_tickets = set()
+        super().__init__()
 
     async def save_transcript(self, channel, ticket_data, reason="Ticket Closed"):
         """Save ticket transcript"""
