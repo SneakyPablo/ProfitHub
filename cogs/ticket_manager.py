@@ -6,7 +6,12 @@ from datetime import datetime
 from bson import ObjectId
 import io
 
-class PaymentMethodSelect(discord.ui.Select):
+class PaymentMethodSelect(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(PaymentDropdown())
+
+class PaymentDropdown(discord.ui.Select):
     def __init__(self):
         options = [
             discord.SelectOption(
@@ -38,8 +43,6 @@ class PaymentMethodSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        self.disabled = True
-        self.view.children[0].disabled = True
         
         payment_info = interaction.client.config.PAYMENT_INFO.get(self.values[0], "Payment information not available")
         
@@ -52,22 +55,16 @@ class PaymentMethodSelect(discord.ui.Select):
         
         view = ConfirmPaymentView()
         await interaction.followup.send(embed=embed, view=view)
+        self.disabled = True
         await interaction.message.edit(view=self.view)
 
 class ConfirmPaymentView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-        self.payment_confirmed = False
 
     @discord.ui.button(label="Confirm Payment", style=discord.ButtonStyle.success, custom_id="confirm_payment")
     async def confirm_payment(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.payment_confirmed:
-            await interaction.response.send_message("Payment already confirmed!", ephemeral=True)
-            return
-            
         await interaction.response.defer(ephemeral=True)
-        self.payment_confirmed = True
-        button.disabled = True
         
         ticket = await interaction.client.db.get_ticket_by_channel(str(interaction.channel.id))
         seller = interaction.guild.get_member(int(ticket['seller_id']))
@@ -80,6 +77,7 @@ class ConfirmPaymentView(discord.ui.View):
         
         view = SellerConfirmationView()
         await interaction.channel.send(f"{seller.mention}", embed=embed, view=view)
+        button.disabled = True
         await interaction.message.edit(view=self)
 
 class SellerConfirmationView(discord.ui.View):
@@ -89,8 +87,12 @@ class SellerConfirmationView(discord.ui.View):
     @discord.ui.button(label="Confirm Payment & Deliver", style=discord.ButtonStyle.success, custom_id="seller_confirm")
     async def confirm_and_deliver(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
-        ticket = await interaction.client.db.get_ticket_by_channel(str(interaction.channel.id))
         
+        ticket = await interaction.client.db.get_ticket_by_channel(str(interaction.channel.id))
+        if str(interaction.user.id) != ticket['seller_id']:
+            await interaction.followup.send("Only the seller can confirm the payment!", ephemeral=True)
+            return
+            
         key = await interaction.client.db.get_available_key(
             ticket['product_id'], 
             ticket['license_type']
@@ -101,21 +103,20 @@ class SellerConfirmationView(discord.ui.View):
                 ephemeral=True
             )
             return
-        
-        # Mark key as used
+
+        # Mark key as used and update stock
         await interaction.client.db.mark_key_as_used(key['_id'], ticket['buyer_id'])
         
         # Update product panel stock count
         try:
-            category = interaction.guild.get_channel(interaction.client.config.TICKET_CATEGORY_ID)
-            for channel in category.guild.channels:
+            for channel in interaction.guild.channels:
                 async for message in channel.history(limit=100):
                     if (message.author == interaction.client.user and 
                         len(message.embeds) > 0 and 
                         str(ticket['product_id']) in message.embeds[0].footer.text):
                         embed = message.embeds[0]
                         
-                        # Get current stock counts
+                        # Update stock status
                         stock_status = ""
                         for ltype in ['daily', 'monthly', 'lifetime']:
                             keys = await interaction.client.db.get_available_key_count(
@@ -125,7 +126,7 @@ class SellerConfirmationView(discord.ui.View):
                             emoji = "🟢" if keys > 0 else "🔴"
                             stock_status += f"{emoji} {ltype.title()}: {keys}\n"
                         
-                        # Update the stock status field
+                        # Update the stock field
                         for i, field in enumerate(embed.fields):
                             if field.name == "📦 Stock Status":
                                 embed.set_field_at(
@@ -137,34 +138,33 @@ class SellerConfirmationView(discord.ui.View):
                                 await message.edit(embed=embed)
                                 break
         except Exception as e:
-            print(f"Error updating product panel: {e}")
-            await interaction.channel.send("⚠️ Failed to update stock display. Please notify an administrator.")
-        
+            print(f"Error updating stock display: {e}")
+
+        # Add buyer role and deliver key
         buyer = interaction.guild.get_member(int(ticket['buyer_id']))
-        
-        # Add buyer role
         buyer_role = interaction.guild.get_role(interaction.client.config.BUYER_ROLE_ID)
+        
         if buyer_role:
             try:
                 await buyer.add_roles(buyer_role)
             except Exception as e:
                 print(f"Error adding buyer role: {e}")
-        
+
         # Send key to buyer
         try:
-            embed = discord.Embed(
+            key_embed = discord.Embed(
                 title="🔑 Your Product Key",
                 description=f"Thank you for your purchase! Here's your product key:\n\n`{key['key']}`",
                 color=discord.Color.green()
             )
-            await buyer.send(embed=embed)
+            await buyer.send(embed=key_embed)
             await interaction.channel.send("✅ Product key has been delivered to buyer's DM!")
         except discord.Forbidden:
             await interaction.channel.send(
                 f"⚠️ Couldn't DM the buyer. Here's the key (visible only in ticket):\n`{key['key']}`"
             )
-        
-        # Send vouch reminder and closure notice
+
+        # Send vouch reminder
         info_embed = discord.Embed(
             title="⭐ Important Information",
             description=(
@@ -180,128 +180,27 @@ class SellerConfirmationView(discord.ui.View):
         
         button.disabled = True
         await interaction.message.edit(view=self)
-        
-        # Schedule buyer role removal if no vouch
-        await asyncio.sleep(86400)  # 24 hours
-        ticket_data = await interaction.client.db.get_ticket_by_channel(str(interaction.channel.id))
-        if not ticket_data.get('vouched', False):
-            try:
-                await buyer.remove_roles(buyer_role)
-                await interaction.channel.send(
-                    f"⚠️ {buyer.mention}'s buyer role has been removed due to not vouching within 24 hours."
-                )
-            except Exception as e:
-                print(f"Error removing buyer role: {e}")
-        
+
         # Start auto-close timer
-        await interaction.channel.send("⏰ This ticket will close in 15 minutes...")
         await asyncio.sleep(900)  # 15 minutes
-        
-        close_embed = discord.Embed(
-            title="🔒 Ticket Closing",
-            description="This ticket will be closed in 60 seconds. Save any important information!",
-            color=discord.Color.red()
-        )
-        await interaction.channel.send(embed=close_embed)
-        
+        await interaction.channel.send("⏰ This ticket will close in 60 seconds...")
         await asyncio.sleep(60)
+        
+        # Save transcript and close ticket
+        ticket_manager = interaction.client.get_cog('TicketManager')
+        if ticket_manager:
+            await ticket_manager.save_transcript(
+                interaction.channel,
+                ticket,
+                "Auto-closed after delivery"
+            )
+        
         await interaction.channel.delete()
 
 class TicketManager(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.active_tickets = set()
-
-    def is_admin():
-        async def predicate(interaction: discord.Interaction):
-            return interaction.guild.get_role(interaction.client.config.ADMIN_ROLE_ID) in interaction.user.roles
-        return app_commands.check(predicate)
-
-    async def create_ticket(self, interaction: discord.Interaction, product_id: str, license_type: str = None):
-        """Create a new ticket"""
-        if interaction.user.id in self.active_tickets:
-            await interaction.followup.send(
-                "You already have an active ticket! Please complete or close it first.", 
-                ephemeral=True
-            )
-            return
-            
-        self.active_tickets.add(interaction.user.id)
-        
-        category = interaction.guild.get_channel(self.bot.config.TICKET_CATEGORY_ID)
-        product = await self.bot.db.get_product(ObjectId(product_id))
-        seller = interaction.guild.get_member(int(product['seller_id']))
-        
-        # Create ticket channel with permissions - only allow panel creator to view
-        overwrites = {
-            interaction.guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-            seller: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-            interaction.guild.get_role(self.bot.config.ADMIN_ROLE_ID): discord.PermissionOverwrite(
-                read_messages=True, 
-                send_messages=True,
-                manage_channels=True
-            )
-        }
-        
-        channel = await interaction.guild.create_text_channel(
-            f"ticket-{interaction.user.name}",
-            category=category,
-            overwrites=overwrites
-        )
-        
-        # Log ticket creation
-        await self.bot.logger.log(
-            "🎫 Ticket Created",
-            f"New ticket created for {product['name']}",
-            discord.Color.green(),
-            fields=[
-                ("Product", product['name'], True),
-                ("License", license_type, True),
-                ("Buyer", f"<@{interaction.user.id}>", True),
-                ("Seller", f"<@{product['seller_id']}>", True),
-                ("Channel", channel.mention, False)
-            ]
-        )
-        
-        price = product['prices'].get(license_type, 0) if license_type else 0
-        
-        ticket_data = {
-            'channel_id': str(channel.id),
-            'buyer_id': str(interaction.user.id),
-            'seller_id': str(seller.id),
-            'product_id': product_id,
-            'license_type': license_type,
-            'price': price
-        }
-        
-        ticket_id = await self.bot.db.create_ticket(ticket_data)
-        
-        embed = discord.Embed(
-            title="🛍️ New Purchase Ticket",
-            description=(
-                f"**Product:** {product['name']}\n"
-                f"**Type:** {license_type.title() if license_type else 'N/A'} License\n"
-                f"**Price:** ${price:.2f}"
-            ),
-            color=discord.Color.green()
-        )
-        embed.add_field(name="👤 Buyer", value=interaction.user.mention)
-        embed.add_field(name="💼 Seller", value=seller.mention)
-        embed.add_field(name="🎫 Ticket ID", value=str(ticket_id), inline=False)
-        
-        await channel.send(embed=embed)
-        
-        view = PaymentMethodSelect()
-        await channel.send(
-            "Please select your payment method:", 
-            view=view
-        )
-        
-        await interaction.followup.send(
-            f"Ticket created! Please check {channel.mention}", 
-            ephemeral=True
-        )
 
     async def save_transcript(self, channel, ticket_data, reason="Ticket Closed"):
         """Save ticket transcript"""
@@ -319,7 +218,6 @@ class TicketManager(commands.Cog):
                 filename=f"transcript-{channel.name}.txt"
             )
 
-            # Send to transcripts channel
             transcripts_channel = self.bot.get_channel(self.bot.config.TRANSCRIPTS_CHANNEL_ID)
             if transcripts_channel:
                 embed = discord.Embed(
@@ -396,7 +294,7 @@ class TicketManager(commands.Cog):
         await interaction.channel.delete()
 
     @app_commands.command(name="add")
-    @is_admin()
+    @app_commands.checks.has_role("Admin")
     async def add_user(self, interaction: discord.Interaction, user: discord.Member):
         """Add a user to the ticket (Admin only)"""
         await interaction.response.defer(ephemeral=True)
