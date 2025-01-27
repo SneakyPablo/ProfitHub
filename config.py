@@ -27,6 +27,9 @@ class Config:
             'bank': os.environ.get('BANK_DETAILS', 'Bank: Example Bank\nIBAN: XX00 0000 0000 0000')
         }
 
+        # Development settings
+        self.DEV_MODE = os.environ.get('DEV_MODE', 'false').lower() == 'true'
+
     def validate(self):
         """Validate required configuration"""
         if not self.TOKEN:
