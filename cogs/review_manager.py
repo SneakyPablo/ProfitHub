@@ -104,4 +104,4 @@ class ReviewManager(commands.Cog):
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 async def setup(bot):
-    await bot.add_cog(ReviewManager(bot))
+    await bot.add_cog(ReviewManager(bot)) 
