@@ -57,7 +57,7 @@ class MarketplaceBot(commands.Bot):
         await self.change_presence(
             activity=discord.Activity(
                 type=discord.ActivityType.watching,
-                name=f"{self.config.PREFIX}help | Marketplace"
+                name=f"{self.config.PREFIX}help | Profit Hub"
             ),
             status=discord.Status.online
         )
