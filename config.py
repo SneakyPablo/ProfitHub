@@ -12,6 +12,8 @@ class Config:
         self.ADMIN_ROLE_ID = int(os.environ.get('ADMIN_ROLE_ID', 0))
         self.SELLER_ROLE_ID = int(os.environ.get('SELLER_ROLE_ID', 0))
         self.BUYER_ROLE_ID = int(os.environ.get('BUYER_ROLE_ID', 0))
+        self.TICKET_LOGS_CHANNEL_ID = int(os.environ.get('TICKET_LOGS_CHANNEL_ID', 0))
+        self.TRANSCRIPTS_CHANNEL_ID = int(os.environ.get('TRANSCRIPTS_CHANNEL_ID', 0))
         
         # Bot settings
         self.EMBED_COLOR = Color.blue()  # Default color for embeds
@@ -35,4 +37,8 @@ class Config:
         if not self.SELLER_ROLE_ID:
             raise ValueError("SELLER_ROLE_ID environment variable not set")
         if not self.BUYER_ROLE_ID:
-            raise ValueError("BUYER_ROLE_ID environment variable not set") 
+            raise ValueError("BUYER_ROLE_ID environment variable not set")
+        if not self.TICKET_LOGS_CHANNEL_ID:
+            raise ValueError("TICKET_LOGS_CHANNEL_ID environment variable not set")
+        if not self.TRANSCRIPTS_CHANNEL_ID:
+            raise ValueError("TRANSCRIPTS_CHANNEL_ID environment variable not set") 
