@@ -8,6 +8,7 @@ from config import Config
 from database import Database
 from utils.logger import Logger
 from discord import app_commands
+from typing import Literal
 
 class MarketplaceBot(commands.Bot):
     def __init__(self):
@@ -55,6 +56,16 @@ class MarketplaceBot(commands.Bot):
         print(f'Logged in as {self.user.name}')
         print(f'Bot ID: {self.user.id}')
         print('------')
+        
+        # Sync commands
+        try:
+            print("Syncing commands...")
+            await self.tree.sync()
+            print("Commands synced successfully!")
+        except Exception as e:
+            print(f"Failed to sync commands: {e}")
+            import traceback
+            traceback.print_exc()
 
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         """Handle slash command errors"""
@@ -92,6 +103,39 @@ class MarketplaceBot(commands.Bot):
         print("Bot is shutting down...")
         await self.db.close()
         await super().close()
+
+    @commands.is_owner()
+    @commands.command(name="reload")
+    async def reload_cog(self, ctx, cog: Literal['ticket_manager', 'product_manager', 'review_manager']):
+        """Reload a specific cog (Bot owner only)"""
+        try:
+            await self.reload_extension(f'cogs.{cog}')
+            await ctx.send(f"✅ Reloaded {cog} successfully!")
+        except Exception as e:
+            await ctx.send(f"❌ Error reloading {cog}: {e}")
+
+    @commands.is_owner()
+    @commands.command(name="reloadall")
+    async def reload_all(self, ctx):
+        """Reload all cogs (Bot owner only)"""
+        cogs = ['ticket_manager', 'product_manager', 'review_manager']
+        for cog in cogs:
+            try:
+                await self.reload_extension(f'cogs.{cog}')
+                await ctx.send(f"✅ Reloaded {cog}")
+            except Exception as e:
+                await ctx.send(f"❌ Error reloading {cog}: {e}")
+
+    @commands.is_owner()
+    @commands.command(name="sync")
+    async def sync_commands(self, ctx):
+        """Manually sync slash commands (Bot owner only)"""
+        try:
+            print("Syncing commands...")
+            synced = await self.tree.sync()
+            await ctx.send(f"✅ Synced {len(synced)} commands!")
+        except Exception as e:
+            await ctx.send(f"❌ Failed to sync commands: {e}")
 
 def run_bot():
     """Initialize and run the bot"""
