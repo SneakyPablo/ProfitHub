@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from bson import ObjectId
+from datetime import datetime
 
 class ProductPanel(discord.ui.View):
     def __init__(self, product_id: str):
@@ -148,22 +149,27 @@ class ProductManager(commands.GroupCog, name="product"):
             
             # Create panel embed
             embed = discord.Embed(
-                title=f"☀️ {name}",
+                title=f"☀️ \"{name}\"",
                 description=(
                     f"A premium product by {interaction.user.mention}\n"
-                    "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 ),
                 color=0x2f3136  # Dark theme color
             )
 
-            # Add features
+            # Add features with numbering and emojis
+            features_text = ""
+            feature_emojis = ["✨", "🔧", "🚀", "💎", "⚡"]
+            for i, (emoji, feature) in enumerate(zip(feature_emojis, features), 1):
+                features_text += f"{i}. {emoji} {feature}\n"
+
             embed.add_field(
-                name="📋 Features",
-                value=f"✓ {features[0]}\n",  # First feature
+                name="🔒 Product Features",
+                value=features_text,
                 inline=False
             )
 
-            # Add pricing with monospace formatting
+            # Add pricing with clean monospace formatting
             embed.add_field(
                 name="💰 License Pricing",
                 value=(
@@ -176,19 +182,16 @@ class ProductManager(commands.GroupCog, name="product"):
                 inline=False
             )
 
-            # Add stock status with improved formatting
-            stock_status = "Keys Available: 0\nUse /addkey to add keys"
-            keys_count = await self.bot.db.get_available_key_count(product_id)
-            if keys_count > 0:
-                stock_status = ""
-                for license_type in ['daily', 'monthly', 'lifetime']:
-                    keys = await self.bot.db.get_available_key_count(product_id, license_type)
-                    emoji = "🔴" if keys == 0 else "🟢"
-                    stock_status += f"{emoji} {license_type.title()}: {keys}\n"
+            # Add stock status
+            stock_status = ""
+            for license_type in ['daily', 'monthly', 'lifetime']:
+                keys = await self.bot.db.get_available_key_count(product_id, license_type)
+                emoji = "🔴" if keys == 0 else "🟢"
+                stock_status += f"{emoji} {license_type.title()}: {keys}\n"
 
             embed.add_field(
                 name="📦 Stock Status",
-                value=f"```\n{stock_status}```",
+                value=stock_status,
                 inline=False
             )
 
@@ -204,10 +207,10 @@ class ProductManager(commands.GroupCog, name="product"):
                 inline=False
             )
 
-            # Add product ID
+            # Add product ID at bottom
             embed.add_field(
                 name="",
-                value=f"Product ID: {product_id}",
+                value=f"Product ID: {product_id} • Created: <t:{int(datetime.now().timestamp())}:R>",
                 inline=False
             )
 
