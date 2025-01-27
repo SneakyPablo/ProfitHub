@@ -320,15 +320,28 @@ class ProductManager(commands.Cog):
             
             await self.bot.db.add_product_key(key_data)
             
+            # Update the product panel
             try:
-                async for message in interaction.channel.history():
+                async for message in interaction.channel.history(limit=100):
                     if message.author == self.bot.user and len(message.embeds) > 0:
                         embed = message.embeds[0]
                         if str(product['_id']) in embed.footer.text:
-                            keys_available = await self.bot.db.get_available_key_count(product['_id'])
-                            for field in embed.fields:
-                                if field.name == "📦 Stock":
-                                    field.value = f"Keys Available: {keys_available}"
+                            # Create updated stock status
+                            stock_status = ""
+                            for ltype in ['daily', 'monthly', 'lifetime']:
+                                keys = await self.bot.db.get_available_key_count(product['_id'], ltype)
+                                emoji = "🟢" if keys > 0 else "🔴"
+                                stock_status += f"{emoji} {ltype.title()}: {keys}\n"
+
+                            # Update the stock status field
+                            for i, field in enumerate(embed.fields):
+                                if field.name == "📦 Stock Status":
+                                    embed.set_field_at(
+                                        i,
+                                        name="📦 Stock Status",
+                                        value=f"```\n{stock_status}```",
+                                        inline=True
+                                    )
                                     await message.edit(embed=embed)
                                     break
             except Exception as e:
@@ -369,48 +382,61 @@ class ProductManager(commands.Cog):
     async def deletepanel(self, interaction: discord.Interaction, product_id: str):
         """Delete a product panel"""
         try:
+            await interaction.response.defer(ephemeral=True)
+            
             product = await self.bot.db.get_product(ObjectId(product_id))
             if not product:
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     "Product not found! Make sure the ID is correct.", 
                     ephemeral=True
                 )
                 return
             
             if product['seller_id'] != str(interaction.user.id):
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     "You don't own this product!", 
                     ephemeral=True
                 )
                 return
 
             found = False
-            async for message in interaction.channel.history(limit=100):
-                if message.author == self.bot.user and len(message.embeds) > 0:
-                    embed = message.embeds[0]
-                    if str(product_id) in embed.footer.text:
-                        await message.delete()
-                        found = True
-                        break
+            # Search in all channels in the category
+            category = interaction.channel.category
+            if category:
+                for channel in category.channels:
+                    try:
+                        async for message in channel.history(limit=100):
+                            if message.author == self.bot.user and len(message.embeds) > 0:
+                                embed = message.embeds[0]
+                                if str(product_id) in embed.footer.text:
+                                    await message.delete()
+                                    found = True
+                                    break
+                        if found:
+                            break
+                    except Exception as e:
+                        print(f"Error searching in channel {channel.name}: {e}")
+                        continue
             
             await self.bot.db.delete_product(ObjectId(product_id))
             await self.bot.db.delete_product_keys(ObjectId(product_id))
             
             if found:
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     "Product panel and associated data deleted successfully!", 
                     ephemeral=True
                 )
             else:
-                await interaction.response.send_message(
-                    "Product data deleted, but couldn't find the panel message.", 
+                await interaction.followup.send(
+                    "Product data deleted, but couldn't find the panel message. You may need to delete it manually.", 
                     ephemeral=True
                 )
         except Exception as e:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"Error deleting panel: Invalid product ID format", 
                 ephemeral=True
             )
+            print(f"Error in deletepanel: {e}")
 
 class ProductPanel(discord.ui.View):
     def __init__(self, product_id: str):
