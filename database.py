@@ -109,9 +109,20 @@ class Database:
 
     # Cleanup Methods
     async def delete_product(self, product_id):
-        """Delete a product and its keys"""
-        await self.products.delete_one({'_id': ObjectId(product_id)})
-        await self.keys.delete_many({'product_id': ObjectId(product_id)})
+        """Delete a product"""
+        await self.products.delete_one({'_id': product_id})
+
+    async def delete_product_keys(self, product_id):
+        """Delete all keys associated with a product"""
+        await self.keys.delete_many({'product_id': product_id})
+
+    async def get_key(self, key_id):
+        """Get a key by ID"""
+        return await self.keys.find_one({'_id': key_id})
+
+    async def delete_key(self, key_id):
+        """Delete a specific key"""
+        await self.keys.delete_one({'_id': key_id})
 
     async def close(self):
         """Close database connection"""
@@ -124,10 +135,6 @@ class Database:
             'license_type': license_type
         })
         return await cursor.to_list(length=None)
-
-    async def delete_key(self, key_id):
-        """Delete a key"""
-        await self.keys.delete_one({'_id': ObjectId(key_id)})
 
     async def get_user_active_tickets(self, user_id: str):
         """Get active tickets for a user"""
