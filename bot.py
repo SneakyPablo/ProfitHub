@@ -51,6 +51,17 @@ class MarketplaceBot(commands.Bot):
                 print(f'Failed to load cog {cog}: {e}')
                 traceback.print_exc()
 
+        # Clear old commands and sync new ones
+        try:
+            print("Clearing old commands...")
+            self.tree.clear_commands(guild=None)
+            print("Syncing new commands...")
+            await self.tree.sync()
+            print("Commands synced successfully!")
+        except Exception as e:
+            print(f"Failed to sync commands: {e}")
+            traceback.print_exc()
+
     async def on_ready(self):
         """Called when bot is ready"""
         print(f'Logged in as {self.user.name}')
