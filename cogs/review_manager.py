@@ -4,9 +4,10 @@ from discord import app_commands
 from datetime import datetime
 from bson import ObjectId
 
-class ReviewManager(commands.Cog):
+class ReviewManager(commands.GroupCog, name="review"):
     def __init__(self, bot):
         self.bot = bot
+        super().__init__()
 
     @app_commands.command(name="vouch")
     async def vouch(self, interaction: discord.Interaction):
