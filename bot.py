@@ -9,6 +9,7 @@ from database import Database
 from utils.logger import Logger
 from discord import app_commands
 from typing import Literal
+import traceback
 
 class MarketplaceBot(commands.Bot):
     def __init__(self):
@@ -48,7 +49,6 @@ class MarketplaceBot(commands.Bot):
                 print(f'Loaded cog: {cog}')
             except Exception as e:
                 print(f'Failed to load cog {cog}: {e}')
-                import traceback
                 traceback.print_exc()
 
     async def on_ready(self):
