@@ -33,9 +33,8 @@ class MarketplaceBot(commands.Bot):
         # Load cogs in specific order
         cogs = [
             'ticket_manager',  # Load this first
-            'product_manager',
-            'review_manager',
-            'help_manager'
+            'review_manager',  # Then load review manager
+            'product_manager'  # Load product manager last
         ]
         
         for cog in cogs:
@@ -44,6 +43,9 @@ class MarketplaceBot(commands.Bot):
                 print(f'Loaded cog: {cog}')
             except Exception as e:
                 print(f'Failed to load cog {cog}: {e}')
+                # Print more detailed error information
+                import traceback
+                traceback.print_exc()
 
     async def on_ready(self):
         """Called when bot is ready"""
