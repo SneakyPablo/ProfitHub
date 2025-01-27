@@ -1,115 +1,107 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
+from datetime import datetime
+from bson import ObjectId
 
 class ReviewManager(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.Cog.listener()
-    async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        if isinstance(error, app_commands.errors.MissingRole):
-            await interaction.response.send_message(
-                f"You don't have permission to use this command.", 
-                ephemeral=True
-            )
-        else:
-            print(f'Error in {interaction.command.name}: {str(error)}')
-
     @app_commands.command(name="vouch")
-    async def vouch(self, interaction: discord.Interaction, seller: discord.Member, 
-                   rating: int, comment: str):
-        if rating < 1 or rating > 5:
-            await interaction.response.send_message(
-                "Rating must be between 1 and 5!", 
+    async def vouch(self, interaction: discord.Interaction):
+        """Vouch for a purchase"""
+        await interaction.response.defer(ephemeral=True)
+        
+        # Check if in ticket channel
+        ticket = await self.bot.db.get_ticket_by_channel(str(interaction.channel.id))
+        if not ticket:
+            await interaction.followup.send(
+                "This command can only be used in ticket channels!", 
                 ephemeral=True
             )
             return
         
-        review_data = {
-            'seller_id': str(seller.id),
-            'reviewer_id': str(interaction.user.id),
-            'rating': rating,
-            'comment': comment,
-            'created_at': discord.utils.utcnow()
-        }
+        # Check if user is the buyer
+        if str(interaction.user.id) != ticket['buyer_id']:
+            await interaction.followup.send(
+                "Only the buyer can vouch for this purchase!", 
+                ephemeral=True
+            )
+            return
         
-        await self.bot.db.create_review(review_data)
+        # Check if already vouched
+        if ticket.get('vouched', False):
+            await interaction.followup.send(
+                "You have already vouched for this purchase!", 
+                ephemeral=True
+            )
+            return
         
-        # Create an enhanced review embed
+        # Update ticket with vouch
+        await self.bot.db.update_ticket(ticket['_id'], {'vouched': True})
+        
+        # Log the vouch
+        await self.bot.logger.log(
+            "⭐ New Vouch",
+            f"A purchase has been vouched for",
+            discord.Color.gold(),
+            fields=[
+                ("Product", (await self.bot.db.get_product(ticket['product_id']))['name'], True),
+                ("Buyer", f"<@{ticket['buyer_id']}>", True),
+                ("Seller", f"<@{ticket['seller_id']}>", True),
+                ("License", ticket.get('license_type', 'N/A'), True)
+            ]
+        )
+        
+        # Send confirmation
+        await interaction.followup.send(
+            "Thank you for vouching! Your buyer role will be kept.", 
+            ephemeral=True
+        )
+        await interaction.channel.send(
+            f"✅ {interaction.user.mention} has vouched for their purchase!"
+        )
+
+    @app_commands.command(name="vouches")
+    async def list_vouches(self, interaction: discord.Interaction, seller: discord.Member = None):
+        """View vouches for a seller"""
+        await interaction.response.defer(ephemeral=True)
+        
+        target_seller = seller or interaction.user
+        vouched_tickets = await self.bot.db.get_seller_vouches(str(target_seller.id))
+        
+        if not vouched_tickets:
+            await interaction.followup.send(
+                f"No vouches found for {target_seller.mention}",
+                ephemeral=True
+            )
+            return
+        
         embed = discord.Embed(
-            title=f"⭐ New Review for {seller.display_name}",
+            title=f"⭐ Vouches for {target_seller.display_name}",
+            description=f"Total Vouches: {len(vouched_tickets)}",
             color=discord.Color.gold()
         )
         
-        # Reviewer info
-        embed.set_author(
-            name=interaction.user.display_name,
-            icon_url=interaction.user.display_avatar.url
-        )
-        
-        # Rating display
-        stars = "⭐" * rating + "☆" * (5 - rating)
-        embed.add_field(
-            name="Rating",
-            value=stars,
-            inline=False
-        )
-        
-        # Review comment
-        embed.add_field(
-            name="Comment",
-            value=comment,
-            inline=False
-        )
-        
-        # Get seller's average rating
-        all_reviews = await self.bot.db.get_reviews(str(seller.id))
-        avg_rating = sum(r['rating'] for r in all_reviews) / len(all_reviews)
-        total_reviews = len(all_reviews)
-        
-        embed.add_field(
-            name="Seller Statistics",
-            value=f"Average Rating: {avg_rating:.1f} ⭐\nTotal Reviews: {total_reviews}",
-            inline=True
-        )
-        
-        embed.set_footer(text=f"Review ID: {review_data['_id']} • {discord.utils.format_dt(discord.utils.utcnow())}")
-        
-        await interaction.channel.send(embed=embed)
-        await interaction.response.send_message("Review posted successfully!", ephemeral=True)
-
-    @app_commands.command(name="vouches")
-    async def vouches(self, interaction: discord.Interaction, seller: discord.Member):
-        reviews = await self.bot.db.get_reviews(str(seller.id))
-        
-        if not reviews:
-            await interaction.response.send_message(
-                f"{seller.display_name} has no reviews yet.",
-                ephemeral=True
-            )
-            return
+        for ticket in vouched_tickets[:10]:  # Show last 10 vouches
+            product = await self.bot.db.get_product(ticket['product_id'])
+            buyer = interaction.guild.get_member(int(ticket['buyer_id']))
             
-        embed = discord.Embed(
-            title=f"Reviews for {seller.display_name}",
-            color=discord.Color.blue()
-        )
-        
-        avg_rating = sum(r['rating'] for r in reviews) / len(reviews)
-        embed.add_field(
-            name="Average Rating",
-            value=f"{'⭐' * round(avg_rating)} ({avg_rating:.1f})"
-        )
-        
-        for review in reviews[:5]:  # Show 5 most recent reviews
-            reviewer = interaction.guild.get_member(int(review['reviewer_id']))
             embed.add_field(
-                name=f"{'⭐' * review['rating']} from {reviewer.display_name}",
-                value=review['comment'],
+                name=f"Purchase: {product['name']}",
+                value=(
+                    f"Buyer: {buyer.mention if buyer else 'Unknown'}\n"
+                    f"Type: {ticket.get('license_type', 'N/A')}\n"
+                    f"Date: {discord.utils.format_dt(ticket['created_at'], style='R')}"
+                ),
                 inline=False
             )
         
-        await interaction.response.send_message(embed=embed)
+        if len(vouched_tickets) > 10:
+            embed.set_footer(text=f"Showing 10 most recent vouches out of {len(vouched_tickets)}")
+        
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
 async def setup(bot):
-    await bot.add_cog(ReviewManager(bot)) 
+    await bot.add_cog(ReviewManager(bot))
