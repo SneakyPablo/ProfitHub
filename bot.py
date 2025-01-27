@@ -57,17 +57,19 @@ class MarketplaceBot(commands.Bot):
         await self.change_presence(
             activity=discord.Activity(
                 type=discord.ActivityType.watching,
-                name=f"{self.config.PREFIX}help | Profit Hub"
+                name=f"{self.config.PREFIX}help | Marketplace"
             ),
             status=discord.Status.online
         )
         
-        # Sync commands
-        try:
-            synced = await self.tree.sync()
-            print(f"Synced {len(synced)} command(s)")
-        except Exception as e:
-            print(f"Failed to sync commands: {e}")
+        # Add a development check for command syncing
+        if self.config.DEV_MODE:  # Only sync in development mode
+            try:
+                print("Syncing commands...")
+                await self.tree.sync()
+                print("Commands synced successfully!")
+            except Exception as e:
+                print(f"Failed to sync commands: {e}")
 
     async def on_command_error(self, ctx, error):
         """Global error handler"""
@@ -85,6 +87,17 @@ class MarketplaceBot(commands.Bot):
         print("Bot is shutting down...")
         await self.db.close()
         await super().close()
+
+    @commands.is_owner()
+    @commands.command(name="sync")
+    async def sync_commands(self, ctx):
+        """Manually sync slash commands (Bot owner only)"""
+        try:
+            print("Syncing commands...")
+            synced = await self.tree.sync()
+            await ctx.send(f"✅ Synced {len(synced)} commands!")
+        except Exception as e:
+            await ctx.send(f"❌ Failed to sync commands: {e}")
 
 def run_bot():
     """Initialize and run the bot"""
