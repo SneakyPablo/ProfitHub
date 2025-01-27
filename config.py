@@ -42,4 +42,4 @@ class Config:
         
         for var_name, value in required_vars.items():
             if not value:
-                raise ValueError(f"{var_name} environment variable not set")
+                raise ValueError(f"{var_name} environment variable not set") 
