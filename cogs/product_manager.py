@@ -148,80 +148,76 @@ class ProductManager(commands.GroupCog, name="product"):
             
             # Create panel embed
             embed = discord.Embed(
-                title=f"🎉 {name}",
+                title=f"{name}",  # Remove emoji from title
                 description=(
-                    f"A premium product by {interaction.user.mention}\n\n"
-                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"A premium product by {interaction.user.mention}\n"
+                    "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
                 ),
-                color=0x2ecc71  # Nice green color
+                color=0x2f3136  # Dark theme color
             )
 
-            # Format features with better emojis and formatting
+            # Format features with better spacing
             features_text = ""
-            feature_emojis = ["🌟", "🔧", "🚀", "💎", "⚡"]
-            for emoji, feature in zip(feature_emojis, features):
-                features_text += f"{emoji} {feature}\n"
+            for feature in features:
+                features_text += f"✦ {feature}\n"
 
             embed.add_field(
-                name="✨ Features",
-                value=features_text + "\n",
+                name="✧ Features",
+                value=f"```\n{features_text}```",
                 inline=False
             )
 
-            # Add pricing with clean formatting
+            # Add pricing with monospace formatting
             embed.add_field(
-                name="💳 Pricing",
+                name="✧ Pricing",
                 value=(
-                    f"Daily License • ${daily_price:.2f}\n"
-                    f"Monthly License • ${monthly_price:.2f}\n"
-                    f"Lifetime License • ${lifetime_price:.2f}\n\n"
+                    "```\n"
+                    f"Daily License    ⋮ ${daily_price:.2f}\n"
+                    f"Monthly License  ⋮ ${monthly_price:.2f}\n"
+                    f"Lifetime License ⋮ ${lifetime_price:.2f}\n"
+                    "```"
                 ),
                 inline=False
             )
 
-            # Add stock status
+            # Add stock status with monospace
             stock_status = ""
             for license_type in ['daily', 'monthly', 'lifetime']:
                 keys = await self.bot.db.get_available_key_count(product_id, license_type)
-                emoji = "🔴" if keys == 0 else "🟢"
+                emoji = "⊗" if keys == 0 else "⊕"
                 stock_status += f"{emoji} {license_type.title()}: {keys}\n"
 
             embed.add_field(
-                name="📦 Stock Status",
-                value=stock_status + "\n",
+                name="✧ Stock Status",
+                value=f"```\n{stock_status}```",
                 inline=False
             )
 
-            # Add security features with better formatting
+            # Add security features with monospace
             embed.add_field(
-                name="🛡️ Security & Support",
+                name="✧ Security & Support",
                 value=(
-                    "✅ Instant Delivery\n"
-                    "✅ 24/7 Customer Support\n"
-                    "✅ Anti-Leak Protection\n"
-                    "✅ Free Automatic Updates\n\n"
+                    "```\n"
+                    "⊕ Instant Delivery\n"
+                    "⊕ 24/7 Customer Support\n"
+                    "⊕ Anti-Leak Protection\n"
+                    "⊕ Free Automatic Updates\n"
+                    "```"
                 ),
                 inline=False
             )
 
-            if category:
-                embed.add_field(
-                    name="📁 Category",
-                    value=category,
-                    inline=True
-                )
-
-            # Add product ID at the bottom
+            # Add product ID with monospace
             embed.add_field(
-                name="🆔 Product ID",
-                value=f"`{product_id}`",
-                inline=True
+                name="✧ Product ID",
+                value=f"```\n{product_id}```",
+                inline=False
             )
 
             # Add bottom border
             embed.add_field(
                 name="",
-                value="━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                value="▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
                 inline=False
             )
 
