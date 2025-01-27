@@ -7,6 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from config import Config
 from database import Database
 from utils.logger import Logger
+from discord import app_commands
 
 class MarketplaceBot(commands.Bot):
     def __init__(self):
@@ -16,15 +17,18 @@ class MarketplaceBot(commands.Bot):
         intents = discord.Intents.default()
         intents.message_content = True
         intents.members = True
+        intents.guilds = True
         
         super().__init__(
             command_prefix=self.config.PREFIX,
             intents=intents,
-            description="Marketplace Bot"
+            description="Marketplace Bot",
+            application_id=1328451665602543768
         )
         
         self.db = Database()
         self.logger = Logger(self)
+        self.tree.on_error = self.on_app_command_error
 
     async def setup_hook(self):
         """Set up bot and load cogs"""
@@ -51,13 +55,43 @@ class MarketplaceBot(commands.Bot):
         print(f'Logged in as {self.user.name}')
         print(f'Bot ID: {self.user.id}')
         print('------')
-        
-        try:
-            print("Syncing commands...")
-            await self.tree.sync()
-            print("Commands synced successfully!")
-        except Exception as e:
-            print(f"Failed to sync commands: {e}")
+
+    async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        """Handle slash command errors"""
+        if isinstance(error, app_commands.CommandOnCooldown):
+            await interaction.response.send_message(
+                f"This command is on cooldown. Try again in {error.retry_after:.2f} seconds.",
+                ephemeral=True
+            )
+        elif isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message(
+                "You don't have permission to use this command!",
+                ephemeral=True
+            )
+        else:
+            print(f'Error in command {interaction.command}: {error}')
+            traceback.print_exc()
+            await interaction.response.send_message(
+                "An error occurred while executing this command.",
+                ephemeral=True
+            )
+
+    async def on_command_error(self, ctx, error):
+        """Global error handler"""
+        if isinstance(error, commands.CommandNotFound):
+            return
+        elif isinstance(error, commands.MissingPermissions):
+            await ctx.send("You don't have permission to use this command!")
+        elif isinstance(error, commands.MissingRole):
+            await ctx.send(f"You need the required role to use this command!")
+        else:
+            print(f'Error in command {ctx.command}: {error}')
+
+    async def close(self):
+        """Cleanup when bot shuts down"""
+        print("Bot is shutting down...")
+        await self.db.close()
+        await super().close()
 
 def run_bot():
     """Initialize and run the bot"""
@@ -67,6 +101,7 @@ def run_bot():
         bot.run(bot.config.TOKEN)
     except Exception as e:
         print(f"Failed to start bot: {e}")
+        traceback.print_exc()
 
 if __name__ == "__main__":
     run_bot()
