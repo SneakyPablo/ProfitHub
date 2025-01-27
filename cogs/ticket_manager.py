@@ -4,6 +4,8 @@ from discord import app_commands
 import asyncio
 from datetime import datetime, timedelta
 from bson import ObjectId
+from typing import Optional
+import io
 
 class PaymentMethodSelect(discord.ui.Select):
     def __init__(self):
@@ -191,6 +193,57 @@ class SellerConfirmationView(discord.ui.View):
         await asyncio.sleep(300)
         await interaction.channel.delete()
 
+class TicketControlsView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Close Ticket", style=discord.ButtonStyle.danger, custom_id="close_ticket")
+    async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        
+        ticket = await interaction.client.db.get_ticket_by_channel(str(interaction.channel.id))
+        if not any([
+            interaction.guild.get_role(interaction.client.config.ADMIN_ROLE_ID) in interaction.user.roles,
+            interaction.guild.get_role(interaction.client.config.SELLER_ROLE_ID) in interaction.user.roles,
+            str(interaction.user.id) == ticket['buyer_id']
+        ]):
+            await interaction.followup.send("You don't have permission to close this ticket!", ephemeral=True)
+            return
+
+        await interaction.channel.send("🔒 Closing ticket in 5 seconds...")
+        
+        # Save transcript before closing
+        ticket_manager = interaction.client.get_cog('TicketManager')
+        if ticket_manager:
+            await ticket_manager.save_transcript(
+                interaction.channel,
+                ticket,
+                f"{interaction.user.name}#{interaction.user.discriminator}"
+            )
+        
+        await asyncio.sleep(5)
+        await interaction.channel.delete()
+
+    @discord.ui.button(label="Claim Ticket", style=discord.ButtonStyle.primary, custom_id="claim_ticket")
+    async def claim_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        
+        if not interaction.guild.get_role(interaction.client.config.ADMIN_ROLE_ID) in interaction.user.roles:
+            await interaction.followup.send("Only administrators can claim tickets!", ephemeral=True)
+            return
+
+        ticket = await interaction.client.db.get_ticket_by_channel(str(interaction.channel.id))
+        await interaction.client.db.update_ticket(ticket['_id'], {'claimed_by': str(interaction.user.id)})
+        
+        embed = discord.Embed(
+            title="👤 Ticket Claimed",
+            description=f"This ticket has been claimed by {interaction.user.mention}",
+            color=discord.Color.blue()
+        )
+        await interaction.channel.send(embed=embed)
+        button.disabled = True
+        await interaction.message.edit(view=self)
+
 class TicketManager(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -275,6 +328,14 @@ class TicketManager(commands.Cog):
             ephemeral=True
         )
 
+        # Add ticket controls after creating the ticket
+        controls_embed = discord.Embed(
+            title="🛠️ Ticket Controls",
+            description="Use these buttons to manage the ticket:",
+            color=discord.Color.blurple()
+        )
+        await channel.send(embed=controls_embed, view=TicketControlsView())
+
     @app_commands.command(name="vouch")
     async def vouch(self, interaction: discord.Interaction):
         """Vouch for a purchase"""
@@ -316,6 +377,236 @@ class TicketManager(commands.Cog):
         await interaction.channel.send(
             f"✅ {interaction.user.mention} has vouched for their purchase!"
         )
+
+    @app_commands.command(name="ticket")
+    @app_commands.describe(
+        action="The action to perform",
+        user="The user to add/remove (for add/remove actions)",
+        reason="Reason for the action (optional)"
+    )
+    @app_commands.choices(action=[
+        discord.app_commands.Choice(name="close", value="close"),
+        discord.app_commands.Choice(name="add", value="add"),
+        discord.app_commands.Choice(name="remove", value="remove"),
+        discord.app_commands.Choice(name="rename", value="rename"),
+        discord.app_commands.Choice(name="claim", value="claim")
+    ])
+    async def ticket_command(self, interaction: discord.Interaction, 
+                           action: str, user: Optional[discord.Member] = None,
+                           reason: Optional[str] = None):
+        """Manage tickets"""
+        await interaction.response.defer(ephemeral=True)
+        
+        ticket = await self.bot.db.get_ticket_by_channel(str(interaction.channel.id))
+        if not ticket:
+            await interaction.followup.send("This command can only be used in ticket channels!", ephemeral=True)
+            return
+
+        if action == "close":
+            await interaction.channel.send("🔒 Closing ticket in 5 seconds...")
+            await asyncio.sleep(5)
+            await interaction.channel.delete()
+            
+        elif action == "add":
+            if not user:
+                await interaction.followup.send("Please specify a user to add!", ephemeral=True)
+                return
+                
+            await interaction.channel.set_permissions(user, 
+                read_messages=True,
+                send_messages=True
+            )
+            await interaction.channel.send(f"✅ Added {user.mention} to the ticket")
+            
+        elif action == "remove":
+            if not user:
+                await interaction.followup.send("Please specify a user to remove!", ephemeral=True)
+                return
+                
+            if str(user.id) in [ticket['buyer_id'], ticket['seller_id']]:
+                await interaction.followup.send("Cannot remove the buyer or seller!", ephemeral=True)
+                return
+                
+            await interaction.channel.set_permissions(user, overwrite=None)
+            await interaction.channel.send(f"❌ Removed {user.mention} from the ticket")
+            
+        elif action == "rename":
+            if not reason:
+                await interaction.followup.send("Please provide a new name!", ephemeral=True)
+                return
+                
+            await interaction.channel.edit(name=f"ticket-{reason}")
+            await interaction.channel.send(f"✏️ Ticket renamed to: ticket-{reason}")
+            
+        elif action == "claim":
+            if not interaction.guild.get_role(self.bot.config.ADMIN_ROLE_ID) in interaction.user.roles:
+                await interaction.followup.send("Only administrators can claim tickets!", ephemeral=True)
+                return
+                
+            await self.bot.db.update_ticket(ticket['_id'], {'claimed_by': str(interaction.user.id)})
+            embed = discord.Embed(
+                title="👤 Ticket Claimed",
+                description=f"This ticket has been claimed by {interaction.user.mention}",
+                color=discord.Color.blue()
+            )
+            await interaction.channel.send(embed=embed)
+
+    @app_commands.command(name="tickets")
+    @is_admin()
+    async def list_tickets(self, interaction: discord.Interaction):
+        """List all active tickets"""
+        await interaction.response.defer(ephemeral=True)
+        
+        active_tickets = await self.bot.db.get_active_tickets()
+        if not active_tickets:
+            await interaction.followup.send("No active tickets found.", ephemeral=True)
+            return
+            
+        embeds = []
+        current_embed = discord.Embed(title="🎫 Active Tickets", color=discord.Color.blue())
+        
+        for ticket in active_tickets:
+            buyer = interaction.guild.get_member(int(ticket['buyer_id']))
+            seller = interaction.guild.get_member(int(ticket['seller_id']))
+            channel = interaction.guild.get_channel(int(ticket['channel_id']))
+            
+            if channel:
+                field_value = (
+                    f"Channel: {channel.mention}\n"
+                    f"Buyer: {buyer.mention if buyer else 'Unknown'}\n"
+                    f"Seller: {seller.mention if seller else 'Unknown'}\n"
+                    f"Type: {ticket.get('license_type', 'N/A')}\n"
+                    f"Status: {'Vouched' if ticket.get('vouched') else 'Not Vouched'}\n"
+                    f"Created: {discord.utils.format_dt(ticket['created_at'])}"
+                )
+                
+                if len(current_embed.fields) >= 25:
+                    embeds.append(current_embed)
+                    current_embed = discord.Embed(title="🎫 Active Tickets (Continued)", color=discord.Color.blue())
+                
+                current_embed.add_field(
+                    name=f"Ticket {ticket['_id']}",
+                    value=field_value,
+                    inline=False
+                )
+        
+        embeds.append(current_embed)
+        
+        await interaction.followup.send(embed=embeds[0], ephemeral=True)
+        for embed in embeds[1:]:
+            await interaction.followup.send(embed=embed, ephemeral=True)
+
+    async def save_transcript(self, channel, ticket_data, reason="Ticket Closed"):
+        """Save ticket transcript"""
+        try:
+            messages = []
+            async for message in channel.history(limit=None, oldest_first=True):
+                if message.content:
+                    messages.append(f"[{message.created_at.strftime('%Y-%m-%d %H:%M:%S')}] {message.author.name}#{message.author.discriminator}: {message.content}")
+                for attachment in message.attachments:
+                    messages.append(f"[{message.created_at.strftime('%Y-%m-%d %H:%M:%S')}] {message.author.name}#{message.author.discriminator}: [Attachment] {attachment.url}")
+
+            transcript_text = "\n".join(messages)
+            transcript_file = discord.File(
+                io.StringIO(transcript_text),
+                filename=f"transcript-{channel.name}.txt"
+            )
+
+            # Create transcript embed
+            embed = discord.Embed(
+                title=f"📝 Ticket Transcript - {channel.name}",
+                description=f"Ticket closed by {reason}",
+                color=discord.Color.blue(),
+                timestamp=datetime.utcnow()
+            )
+            
+            embed.add_field(
+                name="Ticket Information",
+                value=(
+                    f"**Buyer:** <@{ticket_data['buyer_id']}>\n"
+                    f"**Seller:** <@{ticket_data['seller_id']}>\n"
+                    f"**License Type:** {ticket_data.get('license_type', 'N/A')}\n"
+                    f"**Status:** {'Vouched' if ticket_data.get('vouched') else 'Not Vouched'}\n"
+                    f"**Created:** {discord.utils.format_dt(ticket_data['created_at'])}\n"
+                    f"**Closed:** {discord.utils.format_dt(datetime.utcnow())}"
+                ),
+                inline=False
+            )
+
+            # Send to transcripts channel
+            transcripts_channel = self.bot.get_channel(self.bot.config.TRANSCRIPTS_CHANNEL_ID)
+            if transcripts_channel:
+                await transcripts_channel.send(embed=embed, file=transcript_file)
+
+            # Send to ticket logs
+            logs_channel = self.bot.get_channel(self.bot.config.TICKET_LOGS_CHANNEL_ID)
+            if logs_channel:
+                log_embed = discord.Embed(
+                    title="🎫 Ticket Closed",
+                    description=f"Ticket {channel.name} has been closed",
+                    color=discord.Color.red(),
+                    timestamp=datetime.utcnow()
+                )
+                log_embed.add_field(name="Reason", value=reason, inline=False)
+                log_embed.add_field(
+                    name="Users",
+                    value=(
+                        f"Buyer: <@{ticket_data['buyer_id']}>\n"
+                        f"Seller: <@{ticket_data['seller_id']}>"
+                    ),
+                    inline=False
+                )
+                await logs_channel.send(embed=log_embed)
+
+        except Exception as e:
+            print(f"Error saving transcript: {e}")
+
+    @app_commands.command(name="transcript")
+    async def get_transcript(self, interaction: discord.Interaction):
+        """Get the transcript of the current ticket"""
+        await interaction.response.defer(ephemeral=True)
+        
+        ticket = await self.bot.db.get_ticket_by_channel(str(interaction.channel.id))
+        if not ticket:
+            await interaction.followup.send(
+                "This command can only be used in ticket channels!", 
+                ephemeral=True
+            )
+            return
+
+        if not any([
+            interaction.guild.get_role(self.bot.config.ADMIN_ROLE_ID) in interaction.user.roles,
+            str(interaction.user.id) == ticket['buyer_id'],
+            str(interaction.user.id) == ticket['seller_id']
+        ]):
+            await interaction.followup.send(
+                "You don't have permission to get the transcript!", 
+                ephemeral=True
+            )
+            return
+
+        await self.save_transcript(
+            interaction.channel,
+            ticket,
+            f"Requested by {interaction.user.name}#{interaction.user.discriminator}"
+        )
+        
+        await interaction.followup.send(
+            "Transcript has been saved and sent to the transcripts channel!", 
+            ephemeral=True
+        )
+
+    async def log_ticket_event(self, channel, title, description, color=discord.Color.blue()):
+        """Log ticket events to the logs channel"""
+        logs_channel = self.bot.get_channel(self.bot.config.TICKET_LOGS_CHANNEL_ID)
+        if logs_channel:
+            embed = discord.Embed(
+                title=title,
+                description=description,
+                color=color,
+                timestamp=datetime.utcnow()
+            )
+            await logs_channel.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(TicketManager(bot)) 
