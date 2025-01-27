@@ -106,4 +106,47 @@ class Database:
 
     async def close(self):
         """Close the database connection"""
-        self.client.close() 
+        self.client.close()
+
+    async def create_ticket(self, data):
+        """Create a new ticket"""
+        data['created_at'] = datetime.utcnow()
+        data['status'] = 'open'
+        result = await self.tickets.insert_one(data)
+        return result.inserted_id
+
+    async def get_ticket_by_channel(self, channel_id: str):
+        """Get ticket by channel ID"""
+        return await self.tickets.find_one({'channel_id': channel_id})
+
+    async def update_ticket(self, ticket_id, update_data):
+        """Update ticket status"""
+        update_data['updated_at'] = datetime.utcnow()
+        await self.tickets.update_one(
+            {'_id': ObjectId(ticket_id)},
+            {'$set': update_data}
+        )
+
+    async def get_user_active_tickets(self, user_id: str):
+        """Get active tickets for a user"""
+        cursor = self.tickets.find({
+            'buyer_id': user_id,
+            'status': 'open'
+        })
+        return await cursor.to_list(length=None)
+
+    async def get_active_tickets(self):
+        """Get all active tickets"""
+        cursor = self.tickets.find({'status': 'open'})
+        return await cursor.to_list(length=None)
+
+    async def save_message(self, data):
+        """Save a chat message"""
+        data['created_at'] = datetime.utcnow()
+        result = await self.messages.insert_one(data)
+        return result.inserted_id
+
+    async def get_ticket_messages(self, ticket_id):
+        """Get all messages for a ticket"""
+        cursor = self.messages.find({'ticket_id': ticket_id}).sort('created_at', 1)
+        return await cursor.to_list(length=None) 
