@@ -269,7 +269,7 @@ class TicketManager(commands.Cog):
         product = await self.bot.db.get_product(ObjectId(product_id))
         seller = interaction.guild.get_member(int(product['seller_id']))
         
-        # Create ticket channel with permissions
+        # Create ticket channel with permissions - only allow panel creator to view
         overwrites = {
             interaction.guild.default_role: discord.PermissionOverwrite(read_messages=False),
             interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
@@ -281,10 +281,28 @@ class TicketManager(commands.Cog):
             )
         }
         
+        # Only allow the panel creator (seller) to view the ticket
+        if str(interaction.user.id) != product['seller_id']:
+            overwrites[interaction.user] = discord.PermissionOverwrite(read_messages=False)
+        
         channel = await interaction.guild.create_text_channel(
             f"ticket-{interaction.user.name}",
             category=category,
             overwrites=overwrites
+        )
+        
+        # Log ticket creation
+        await self.bot.logger.log(
+            "🎫 Ticket Created",
+            f"New ticket created for {product['name']}",
+            discord.Color.green(),
+            fields=[
+                ("Product", product['name'], True),
+                ("License", license_type, True),
+                ("Buyer", f"<@{interaction.user.id}>", True),
+                ("Seller", f"<@{product['seller_id']}>", True),
+                ("Channel", channel.mention, False)
+            ]
         )
         
         price = product['prices'].get(license_type, 0) if license_type else 0
