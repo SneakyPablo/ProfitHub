@@ -294,9 +294,94 @@ class ProductManager(commands.GroupCog, name="product"):
             )
             print(f"Error in products command: {e}")
 
-    @app_commands.command(name="keys")
+    @app_commands.command(name="add")
+    @app_commands.describe(
+        product_id="Product ID",
+        license_type="License type (daily/monthly/lifetime)",
+        key="Product key"
+    )
     @is_seller()
-    async def view_keys(self, interaction: discord.Interaction):
+    async def add_key(self, interaction: discord.Interaction, product_id: str, license_type: str, key: str):
+        """Add a key to your product"""
+        await interaction.response.defer(ephemeral=True)
+        
+        if license_type.lower() not in ['daily', 'monthly', 'lifetime']:
+            await interaction.followup.send(
+                "Invalid license type! Use 'daily', 'monthly', or 'lifetime'", 
+                ephemeral=True
+            )
+            return
+
+        try:
+            product = await self.bot.db.get_product(ObjectId(product_id))
+            if not product:
+                await interaction.followup.send("Product not found!", ephemeral=True)
+                return
+            
+            if product['seller_id'] != str(interaction.user.id):
+                await interaction.followup.send("You don't own this product!", ephemeral=True)
+                return
+
+            key_data = {
+                'product_id': product['_id'],
+                'key': key,
+                'license_type': license_type.lower(),
+                'seller_id': str(interaction.user.id),
+                'is_used': False
+            }
+            
+            await self.bot.db.add_product_key(key_data)
+            
+            # Update panel stock display
+            try:
+                async for message in interaction.channel.history(limit=100):
+                    if (message.author == self.bot.user and 
+                        len(message.embeds) > 0 and 
+                        str(product_id) in message.embeds[0].footer.text):
+                        embed = message.embeds[0]
+                        
+                        stock_status = ""
+                        for ltype in ['daily', 'monthly', 'lifetime']:
+                            keys = await self.bot.db.get_available_key_count(product_id, ltype)
+                            emoji = "🟢" if keys > 0 else "🔴"
+                            stock_status += f"{emoji} {ltype.title()}: {keys}\n"
+                        
+                        for i, field in enumerate(embed.fields):
+                            if field.name == "📦 Stock Status":
+                                embed.set_field_at(
+                                    i,
+                                    name="📦 Stock Status",
+                                    value=stock_status,
+                                    inline=True
+                                )
+                                await message.edit(embed=embed)
+                                break
+            except Exception as e:
+                print(f"Error updating panel: {e}")
+
+            await interaction.followup.send(
+                f"Key added successfully to {product['name']} ({license_type})!", 
+                ephemeral=True
+            )
+            
+            # Log key addition
+            await self.bot.logger.log(
+                "🔑 Key Added",
+                f"New key added to {product['name']}",
+                discord.Color.blue(),
+                fields=[
+                    ("Product", product['name'], True),
+                    ("License Type", license_type, True),
+                    ("Added By", interaction.user.mention, True)
+                ]
+            )
+            
+        except Exception as e:
+            await interaction.followup.send(f"Error adding key: {str(e)}", ephemeral=True)
+
+    @app_commands.command(name="list")
+    @is_seller()
+    async def list_keys(self, interaction: discord.Interaction):
         """View all your product keys"""
         try:
             # Send initial response to prevent timeout
@@ -382,95 +467,9 @@ class ProductManager(commands.GroupCog, name="product"):
             )
             print(f"Error in keys command: {e}")
 
-    @app_commands.command(name="addkey")
-    @app_commands.describe(
-        product_id="Product ID",
-        license_type="License type (daily/monthly/lifetime)",
-        key="Product key"
-    )
+    @app_commands.command(name="delete")
     @is_seller()
-    async def addkey(self, interaction: discord.Interaction, product_id: str, 
-                     license_type: str, key: str):
-        """Add a key to your product"""
-        await interaction.response.defer(ephemeral=True)
-        
-        if license_type.lower() not in ['daily', 'monthly', 'lifetime']:
-            await interaction.followup.send(
-                "Invalid license type! Use 'daily', 'monthly', or 'lifetime'", 
-                ephemeral=True
-            )
-            return
-
-        try:
-            product = await self.bot.db.get_product(ObjectId(product_id))
-            if not product:
-                await interaction.followup.send("Product not found!", ephemeral=True)
-                return
-            
-            if product['seller_id'] != str(interaction.user.id):
-                await interaction.followup.send("You don't own this product!", ephemeral=True)
-                return
-
-            key_data = {
-                'product_id': product['_id'],
-                'key': key,
-                'license_type': license_type.lower(),
-                'seller_id': str(interaction.user.id),
-                'is_used': False
-            }
-            
-            await self.bot.db.add_product_key(key_data)
-            
-            # Update panel stock display
-            try:
-                async for message in interaction.channel.history(limit=100):
-                    if (message.author == self.bot.user and 
-                        len(message.embeds) > 0 and 
-                        str(product_id) in message.embeds[0].footer.text):
-                        embed = message.embeds[0]
-                        
-                        stock_status = ""
-                        for ltype in ['daily', 'monthly', 'lifetime']:
-                            keys = await self.bot.db.get_available_key_count(product_id, ltype)
-                            emoji = "🟢" if keys > 0 else "🔴"
-                            stock_status += f"{emoji} {ltype.title()}: {keys}\n"
-                        
-                        for i, field in enumerate(embed.fields):
-                            if field.name == "📦 Stock Status":
-                                embed.set_field_at(
-                                    i,
-                                    name="📦 Stock Status",
-                                    value=stock_status,
-                                    inline=True
-                                )
-                                await message.edit(embed=embed)
-                                break
-            except Exception as e:
-                print(f"Error updating panel: {e}")
-
-            await interaction.followup.send(
-                f"Key added successfully to {product['name']} ({license_type})!", 
-                ephemeral=True
-            )
-            
-            # Log key addition
-            await self.bot.logger.log(
-                "🔑 Key Added",
-                f"New key added to {product['name']}",
-                discord.Color.blue(),
-                fields=[
-                    ("Product", product['name'], True),
-                    ("License Type", license_type, True),
-                    ("Added By", interaction.user.mention, True)
-                ]
-            )
-            
-        except Exception as e:
-            await interaction.followup.send(f"Error adding key: {str(e)}", ephemeral=True)
-
-    @app_commands.command(name="deletekey")
-    @is_seller()
-    async def deletekey(self, interaction: discord.Interaction, key_id: str):
+    async def delete_key(self, interaction: discord.Interaction, key_id: str):
         """Delete a key from your product"""
         key = await self.bot.db.get_key(ObjectId(key_id))
         
@@ -488,9 +487,9 @@ class ProductManager(commands.GroupCog, name="product"):
         await self.bot.db.delete_key(ObjectId(key_id))
         await interaction.response.send_message("Key deleted successfully!", ephemeral=True)
 
-    @app_commands.command(name="deletepanel")
+    @app_commands.command(name="remove")
     @is_seller()
-    async def deletepanel(self, interaction: discord.Interaction, product_id: str):
+    async def remove_panel(self, interaction: discord.Interaction, product_id: str):
         """Delete a product panel"""
         try:
             await interaction.response.defer(ephemeral=True)
