@@ -28,8 +28,14 @@ class MarketplaceBot(commands.Bot):
         """Set up bot and load cogs"""
         print("Setting up bot...")
         
-        # Load all cogs
-        cogs = ['product_manager', 'ticket_manager', 'review_manager', 'help_manager']
+        # Load cogs in specific order
+        cogs = [
+            'ticket_manager',  # Load this first
+            'product_manager',
+            'review_manager',
+            'help_manager'
+        ]
+        
         for cog in cogs:
             try:
                 await self.load_extension(f'cogs.{cog}')
