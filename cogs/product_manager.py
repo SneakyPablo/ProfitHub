@@ -109,11 +109,14 @@ class ProductManager(commands.Cog):
     async def list_products(self, interaction: discord.Interaction):
         """List all products you have access to view"""
         try:
+            # Send initial response to prevent timeout
+            await interaction.response.defer(ephemeral=True)
+            
             is_seller = interaction.guild.get_role(self.bot.config.SELLER_ROLE_ID) in interaction.user.roles
             is_admin = interaction.guild.get_role(self.bot.config.ADMIN_ROLE_ID) in interaction.user.roles
             
             if not (is_seller or is_admin):
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     "You need to be a seller or admin to use this command!", 
                     ephemeral=True
                 )
@@ -122,7 +125,7 @@ class ProductManager(commands.Cog):
             products = await self.bot.db.get_all_products() if is_admin else await self.bot.db.get_seller_products(str(interaction.user.id))
             
             if not products:
-                await interaction.response.send_message("No products found.", ephemeral=True)
+                await interaction.followup.send("No products found.", ephemeral=True)
                 return
             
             embeds = []
@@ -177,15 +180,15 @@ class ProductManager(commands.Cog):
                 embeds.append(current_embed)
             
             if not embeds:
-                await interaction.response.send_message("No valid products found.", ephemeral=True)
+                await interaction.followup.send("No valid products found.", ephemeral=True)
                 return
             
-            await interaction.response.send_message(embed=embeds[0], ephemeral=True)
+            await interaction.followup.send(embed=embeds[0], ephemeral=True)
             for embed in embeds[1:]:
                 await interaction.followup.send(embed=embed, ephemeral=True)
             
         except Exception as e:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"An error occurred while listing products. Please try again later.", 
                 ephemeral=True
             )
@@ -196,10 +199,13 @@ class ProductManager(commands.Cog):
     async def view_keys(self, interaction: discord.Interaction):
         """View all your product keys"""
         try:
+            # Send initial response to prevent timeout
+            await interaction.response.defer(ephemeral=True)
+            
             products = await self.bot.db.get_seller_products(str(interaction.user.id))
             
             if not products:
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     "You don't have any products!", 
                     ephemeral=True
                 )
@@ -259,18 +265,18 @@ class ProductManager(commands.Cog):
                 embeds.append(current_embed)
 
             if not embeds:
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     "No keys found for your products.", 
                     ephemeral=True
                 )
                 return
 
-            await interaction.response.send_message(embed=embeds[0], ephemeral=True)
+            await interaction.followup.send(embed=embeds[0], ephemeral=True)
             for embed in embeds[1:]:
                 await interaction.followup.send(embed=embed, ephemeral=True)
 
         except Exception as e:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "An error occurred while fetching keys. Please try again later.",
                 ephemeral=True
             )
