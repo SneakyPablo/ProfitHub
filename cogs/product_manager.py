@@ -295,16 +295,17 @@ class ProductManager(commands.Cog):
             return
 
         try:
+            await interaction.response.defer(ephemeral=True)
             product = await self.bot.db.get_product(ObjectId(product_id))
             if not product:
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     "Product not found! Make sure the ID is correct.", 
                     ephemeral=True
                 )
                 return
             
             if product['seller_id'] != str(interaction.user.id):
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     "You don't own this product!", 
                     ephemeral=True
                 )
@@ -321,41 +322,46 @@ class ProductManager(commands.Cog):
             await self.bot.db.add_product_key(key_data)
             
             # Update the product panel
-            try:
-                async for message in interaction.channel.history(limit=100):
-                    if message.author == self.bot.user and len(message.embeds) > 0:
-                        embed = message.embeds[0]
-                        if str(product['_id']) in embed.footer.text:
-                            # Create updated stock status
-                            stock_status = ""
-                            for ltype in ['daily', 'monthly', 'lifetime']:
-                                keys = await self.bot.db.get_available_key_count(product['_id'], ltype)
-                                emoji = "🟢" if keys > 0 else "🔴"
-                                stock_status += f"{emoji} {ltype.title()}: {keys}\n"
+            category = interaction.channel.category
+            if category:
+                for channel in category.channels:
+                    try:
+                        async for message in channel.history(limit=100):
+                            if message.author == self.bot.user and len(message.embeds) > 0:
+                                embed = message.embeds[0]
+                                if str(product['_id']) in embed.footer.text:
+                                    # Create updated stock status
+                                    stock_status = ""
+                                    for ltype in ['daily', 'monthly', 'lifetime']:
+                                        keys = await self.bot.db.get_available_key_count(product['_id'], ltype)
+                                        emoji = "🟢" if keys > 0 else "🔴"
+                                        stock_status += f"{emoji} {ltype.title()}: {keys}\n"
 
-                            # Update the stock status field
-                            for i, field in enumerate(embed.fields):
-                                if field.name == "📦 Stock Status":
-                                    embed.set_field_at(
-                                        i,
-                                        name="📦 Stock Status",
-                                        value=f"```\n{stock_status}```",
-                                        inline=True
-                                    )
-                                    await message.edit(embed=embed)
-                                    break
-            except Exception as e:
-                print(f"Error updating product panel: {e}")
+                                    # Update the stock status field
+                                    for i, field in enumerate(embed.fields):
+                                        if field.name == "📦 Stock Status":
+                                            embed.set_field_at(
+                                                i,
+                                                name="📦 Stock Status",
+                                                value=f"```\n{stock_status}```",
+                                                inline=True
+                                            )
+                                            await message.edit(embed=embed)
+                                            break
+                    except Exception as e:
+                        print(f"Error updating product panel in {channel.name}: {e}")
+                        continue
 
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"Key added successfully to {product['name']} ({license_type})!", 
                 ephemeral=True
             )
         except Exception as e:
-            await interaction.response.send_message(
-                f"Error adding key: Invalid product ID format", 
+            await interaction.followup.send(
+                f"Error adding key: {str(e)}", 
                 ephemeral=True
             )
+            print(f"Error in addkey: {e}")
 
     @app_commands.command(name="deletekey")
     @is_seller()
@@ -418,6 +424,7 @@ class ProductManager(commands.Cog):
                         print(f"Error searching in channel {channel.name}: {e}")
                         continue
             
+            # Delete from database first
             await self.bot.db.delete_product(ObjectId(product_id))
             await self.bot.db.delete_product_keys(ObjectId(product_id))
             
@@ -433,7 +440,7 @@ class ProductManager(commands.Cog):
                 )
         except Exception as e:
             await interaction.followup.send(
-                f"Error deleting panel: Invalid product ID format", 
+                f"Error deleting panel: {str(e)}", 
                 ephemeral=True
             )
             print(f"Error in deletepanel: {e}")
@@ -496,12 +503,41 @@ class ProductPanel(discord.ui.View):
             await interaction.response.send_message("Error fetching product information.", ephemeral=True)
 
     async def create_purchase_ticket(self, interaction: discord.Interaction, license_type: str):
-        ticket_manager = interaction.client.get_cog('TicketManager')
-        if ticket_manager:
-            await ticket_manager.create_ticket(interaction, self.product_id, license_type)
-        else:
-            await interaction.response.send_message(
-                "Error: Ticket system is not available.", 
+        try:
+            await interaction.response.defer(ephemeral=True)
+            
+            # Check if specific license type has stock
+            keys = await interaction.client.db.get_available_key_count(ObjectId(self.product_id), license_type)
+            if keys == 0:
+                await interaction.followup.send(
+                    f"Sorry, this product is currently out of stock for {license_type} licenses!", 
+                    ephemeral=True
+                )
+                return
+
+            # Get the TicketManager cog
+            ticket_manager = interaction.client.get_cog('TicketManager')
+            if not ticket_manager:
+                await interaction.followup.send(
+                    "Error: Ticket system is currently unavailable. Please contact an administrator.", 
+                    ephemeral=True
+                )
+                return
+
+            # Create the ticket
+            try:
+                await ticket_manager.create_ticket(interaction, self.product_id, license_type)
+            except Exception as e:
+                print(f"Error creating ticket: {e}")
+                await interaction.followup.send(
+                    "An error occurred while creating your ticket. Please try again or contact an administrator.",
+                    ephemeral=True
+                )
+            
+        except Exception as e:
+            print(f"Error in create_purchase_ticket: {e}")
+            await interaction.followup.send(
+                "An error occurred while processing your request. Please try again later.",
                 ephemeral=True
             )
 
