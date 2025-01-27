@@ -63,6 +63,52 @@ class ReviewManager(commands.Cog):
             f"✅ {interaction.user.mention} has vouched for their purchase!"
         )
 
+        # Create and send review panel
+        product = await self.bot.db.get_product(ticket['product_id'])
+        seller = interaction.guild.get_member(int(ticket['seller_id']))
+        
+        review_embed = discord.Embed(
+            title="⭐ New Verified Purchase Review",
+            color=discord.Color.gold(),
+            timestamp=datetime.utcnow()
+        )
+        
+        review_embed.add_field(
+            name="Product",
+            value=product['name'],
+            inline=True
+        )
+        review_embed.add_field(
+            name="License Type",
+            value=ticket['license_type'].title(),
+            inline=True
+        )
+        review_embed.add_field(
+            name="Seller",
+            value=seller.mention,
+            inline=True
+        )
+        review_embed.add_field(
+            name="Buyer",
+            value=interaction.user.mention,
+            inline=True
+        )
+        
+        # Get seller's total vouches
+        seller_vouches = await self.bot.db.get_seller_vouches(str(seller.id))
+        review_embed.add_field(
+            name="Total Seller Vouches",
+            value=str(len(seller_vouches)),
+            inline=True
+        )
+        
+        review_embed.set_footer(text=f"Seller ID: {seller.id}")
+        
+        # Send to reviews channel
+        reviews_channel = self.bot.get_channel(self.bot.config.REVIEWS_CHANNEL_ID)
+        if reviews_channel:
+            await reviews_channel.send(embed=review_embed)
+
     @app_commands.command(name="vouches")
     async def list_vouches(self, interaction: discord.Interaction, seller: discord.Member = None):
         """View vouches for a seller"""
