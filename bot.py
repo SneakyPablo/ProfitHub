@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from motor.motor_asyncio import AsyncIOMotorClient
 from config import Config
 from database import Database
+from utils.logger import Logger
 
 class MarketplaceBot(commands.Bot):
     def __init__(self):
@@ -23,6 +24,7 @@ class MarketplaceBot(commands.Bot):
         )
         
         self.db = Database()
+        self.logger = Logger(self)
 
     async def setup_hook(self):
         """Set up bot and load cogs"""
