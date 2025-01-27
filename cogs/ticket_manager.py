@@ -101,9 +101,50 @@ class SellerConfirmationView(discord.ui.View):
             )
             return
         
+        # Mark key as used
         await interaction.client.db.mark_key_as_used(key['_id'], ticket['buyer_id'])
         
+        # Update product panel stock count
+        try:
+            category = interaction.channel.category
+            if category:
+                for channel in category.channels:
+                    async for message in channel.history(limit=100):
+                        if message.author == interaction.client.user and len(message.embeds) > 0:
+                            embed = message.embeds[0]
+                            if str(ticket['product_id']) in embed.footer.text:
+                                # Update stock status
+                                stock_status = ""
+                                for ltype in ['daily', 'monthly', 'lifetime']:
+                                    keys = await interaction.client.db.get_available_key_count(ticket['product_id'], ltype)
+                                    emoji = "🟢" if keys > 0 else "🔴"
+                                    stock_status += f"{emoji} {ltype.title()}: {keys}\n"
+                                
+                                # Update the stock status field
+                                for i, field in enumerate(embed.fields):
+                                    if field.name == "📦 Stock Status":
+                                        embed.set_field_at(
+                                            i,
+                                            name="📦 Stock Status",
+                                            value=f"```\n{stock_status}```",
+                                            inline=True
+                                        )
+                                        await message.edit(embed=embed)
+                                        break
+        except Exception as e:
+            print(f"Error updating product panel: {e}")
+        
         buyer = interaction.guild.get_member(int(ticket['buyer_id']))
+        
+        # Add buyer role
+        buyer_role = interaction.guild.get_role(interaction.client.config.BUYER_ROLE_ID)
+        if buyer_role:
+            try:
+                await buyer.add_roles(buyer_role)
+            except Exception as e:
+                print(f"Error adding buyer role: {e}")
+        
+        # Send key to buyer
         try:
             embed = discord.Embed(
                 title="🔑 Your Product Key",
@@ -117,14 +158,37 @@ class SellerConfirmationView(discord.ui.View):
                 f"⚠️ Couldn't DM the buyer. Here's the key (visible only in ticket):\n`{key['key']}`"
             )
         
+        # Send vouch reminder
+        vouch_embed = discord.Embed(
+            title="⭐ Vouch Reminder",
+            description=(
+                f"{buyer.mention}, please don't forget to vouch for your purchase!\n\n"
+                "You have 24 hours to vouch using the `/vouch` command.\n"
+                "If you don't vouch within 24 hours, your buyer role will be removed."
+            ),
+            color=discord.Color.gold()
+        )
+        await interaction.channel.send(embed=vouch_embed)
+        
         button.disabled = True
         await interaction.message.edit(view=self)
+        
+        # Schedule buyer role removal if no vouch
+        await asyncio.sleep(86400)  # 24 hours
+        ticket_data = await interaction.client.db.get_ticket_by_channel(str(interaction.channel.id))
+        if not ticket_data.get('vouched', False):
+            try:
+                await buyer.remove_roles(buyer_role)
+                await interaction.channel.send(
+                    f"⚠️ {buyer.mention}'s buyer role has been removed due to not vouching within 24 hours."
+                )
+            except Exception as e:
+                print(f"Error removing buyer role: {e}")
         
         # Start auto-close timer
         await asyncio.sleep(300)  # 5 minutes
         await interaction.channel.send("This ticket will be closed in 5 minutes.")
         await asyncio.sleep(300)
-        
         await interaction.channel.delete()
 
 class TicketManager(commands.Cog):
@@ -209,6 +273,48 @@ class TicketManager(commands.Cog):
         await interaction.followup.send(
             f"Ticket created! Please check {channel.mention}", 
             ephemeral=True
+        )
+
+    @app_commands.command(name="vouch")
+    async def vouch(self, interaction: discord.Interaction):
+        """Vouch for a purchase"""
+        await interaction.response.defer(ephemeral=True)
+        
+        # Check if in ticket channel
+        ticket = await self.bot.db.get_ticket_by_channel(str(interaction.channel.id))
+        if not ticket:
+            await interaction.followup.send(
+                "This command can only be used in ticket channels!", 
+                ephemeral=True
+            )
+            return
+        
+        # Check if user is the buyer
+        if str(interaction.user.id) != ticket['buyer_id']:
+            await interaction.followup.send(
+                "Only the buyer can vouch for this purchase!", 
+                ephemeral=True
+            )
+            return
+        
+        # Check if already vouched
+        if ticket.get('vouched', False):
+            await interaction.followup.send(
+                "You have already vouched for this purchase!", 
+                ephemeral=True
+            )
+            return
+        
+        # Update ticket with vouch
+        await self.bot.db.update_ticket(ticket['_id'], {'vouched': True})
+        
+        # Send confirmation
+        await interaction.followup.send(
+            "Thank you for vouching! Your buyer role will be kept.", 
+            ephemeral=True
+        )
+        await interaction.channel.send(
+            f"✅ {interaction.user.mention} has vouched for their purchase!"
         )
 
 async def setup(bot):
