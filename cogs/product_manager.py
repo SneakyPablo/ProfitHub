@@ -148,76 +148,66 @@ class ProductManager(commands.GroupCog, name="product"):
             
             # Create panel embed
             embed = discord.Embed(
-                title=f"{name}",  # Remove emoji from title
+                title=f"☀️ {name}",
                 description=(
                     f"A premium product by {interaction.user.mention}\n"
-                    "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
+                    "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
                 ),
                 color=0x2f3136  # Dark theme color
             )
 
-            # Format features with better spacing
-            features_text = ""
-            for feature in features:
-                features_text += f"✦ {feature}\n"
-
+            # Add features
             embed.add_field(
-                name="✧ Features",
-                value=f"```\n{features_text}```",
+                name="📋 Features",
+                value=f"✓ {features[0]}\n",  # First feature
                 inline=False
             )
 
             # Add pricing with monospace formatting
             embed.add_field(
-                name="✧ Pricing",
+                name="💰 License Pricing",
                 value=(
                     "```\n"
-                    f"Daily License    ⋮ ${daily_price:.2f}\n"
-                    f"Monthly License  ⋮ ${monthly_price:.2f}\n"
-                    f"Lifetime License ⋮ ${lifetime_price:.2f}\n"
+                    f"Daily License    │ ${daily_price:.2f}\n"
+                    f"Monthly License  │ ${monthly_price:.2f}\n"
+                    f"Lifetime License │ ${lifetime_price:.2f}\n"
                     "```"
                 ),
                 inline=False
             )
 
-            # Add stock status with monospace
-            stock_status = ""
-            for license_type in ['daily', 'monthly', 'lifetime']:
-                keys = await self.bot.db.get_available_key_count(product_id, license_type)
-                emoji = "⊗" if keys == 0 else "⊕"
-                stock_status += f"{emoji} {license_type.title()}: {keys}\n"
+            # Add stock status with improved formatting
+            stock_status = "Keys Available: 0\nUse /addkey to add keys"
+            keys_count = await self.bot.db.get_available_key_count(product_id)
+            if keys_count > 0:
+                stock_status = ""
+                for license_type in ['daily', 'monthly', 'lifetime']:
+                    keys = await self.bot.db.get_available_key_count(product_id, license_type)
+                    emoji = "🔴" if keys == 0 else "🟢"
+                    stock_status += f"{emoji} {license_type.title()}: {keys}\n"
 
             embed.add_field(
-                name="✧ Stock Status",
+                name="📦 Stock Status",
                 value=f"```\n{stock_status}```",
                 inline=False
             )
 
-            # Add security features with monospace
+            # Add security features
             embed.add_field(
-                name="✧ Security & Support",
+                name="🛡️ Security & Support",
                 value=(
-                    "```\n"
-                    "⊕ Instant Delivery\n"
-                    "⊕ 24/7 Customer Support\n"
-                    "⊕ Anti-Leak Protection\n"
-                    "⊕ Free Automatic Updates\n"
-                    "```"
+                    "✓ Instant Delivery\n"
+                    "✓ 24/7 Support\n"
+                    "✓ Anti-Leak Protection\n"
+                    "✓ Automatic Updates"
                 ),
                 inline=False
             )
 
-            # Add product ID with monospace
-            embed.add_field(
-                name="✧ Product ID",
-                value=f"```\n{product_id}```",
-                inline=False
-            )
-
-            # Add bottom border
+            # Add product ID
             embed.add_field(
                 name="",
-                value="▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+                value=f"Product ID: {product_id}",
                 inline=False
             )
 
