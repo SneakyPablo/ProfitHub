@@ -321,3 +321,212 @@ class SellerConfirmationView(discord.ui.View):
                 ephemeral=True
             )
             return
+    @app_commands.command(name="adduser")
+    @is_admin()
+    async def add_user(self, interaction: discord.Interaction, user: discord.Member):
+        """Add a user to the current ticket (Admin only)"""
+        ticket = await self.bot.db.get_ticket_by_channel(str(interaction.channel.id))
+        if not ticket:
+            await interaction.response.send_message(
+                "This command can only be used in ticket channels!", 
+                ephemeral=True
+            )
+            return
+        
+        await interaction.channel.set_permissions(user, 
+            read_messages=True,
+            send_messages=True
+        )
+        
+        await interaction.response.send_message(
+            f"Added {user.mention} to the ticket.",
+            allowed_mentions=discord.AllowedMentions(users=True)
+        )
+
+    @app_commands.command(name="removeuser")
+    @is_admin()
+    async def remove_user(self, interaction: discord.Interaction, user: discord.Member):
+        """Remove a user from the current ticket (Admin only)"""
+        ticket = await self.bot.db.get_ticket_by_channel(str(interaction.channel.id))
+        if not ticket:
+            await interaction.response.send_message(
+                "This command can only be used in ticket channels!", 
+                ephemeral=True
+            )
+            return
+        
+        # Don't allow removing the buyer or seller
+        if str(user.id) in [ticket['buyer_id'], ticket['seller_id']]:
+            await interaction.response.send_message(
+                "Cannot remove the buyer or seller from the ticket!", 
+                ephemeral=True
+            )
+            return
+        
+        await interaction.channel.set_permissions(user, overwrite=None)
+        await interaction.response.send_message(f"Removed {user.mention} from the ticket.")
+
+    @app_commands.command(name="forceclose")
+    @is_admin()
+    async def force_close(self, interaction: discord.Interaction):
+        """Force close a ticket (Admin only)"""
+        ticket = await self.bot.db.get_ticket_by_channel(str(interaction.channel.id))
+        if not ticket:
+            await interaction.response.send_message(
+                "This command can only be used in ticket channels!", 
+                ephemeral=True
+            )
+            return
+        
+        await interaction.response.send_message("⚠️ Force closing ticket in 5 seconds...")
+        await asyncio.sleep(5)
+        
+        # Save transcript before closing
+        messages = await interaction.channel.history(limit=None, oldest_first=True).flatten()
+        transcript_data = {
+            'ticket_id': ticket['_id'],
+            'channel_id': str(interaction.channel.id),
+            'messages': [
+                {
+                    'content': msg.content,
+                    'author_id': str(msg.author.id),
+                    'created_at': msg.created_at,
+                    'attachments': [att.url for att in msg.attachments]
+                }
+                for msg in messages
+            ],
+            'closed_at': datetime.utcnow(),
+            'closed_by': str(interaction.user.id),
+            'force_closed': True
+        }
+        
+        await self.bot.db.update_ticket(
+            ticket['_id'],
+            {
+                'status': 'force_closed',
+                'closed_at': datetime.utcnow(),
+                'closed_by': str(interaction.user.id),
+                'force_closed': True
+            }
+        )
+        
+        # Remove from active tickets
+        if int(ticket['buyer_id']) in self.active_tickets:
+            self.active_tickets.remove(int(ticket['buyer_id']))
+        
+        # Notify users
+        try:
+            buyer = interaction.guild.get_member(int(ticket['buyer_id']))
+            seller = interaction.guild.get_member(int(ticket['seller_id']))
+            
+            notify_embed = discord.Embed(
+                title="Ticket Force Closed",
+                description=f"Your ticket has been force closed by an administrator.",
+                color=discord.Color.red()
+            )
+            
+            if buyer:
+                await buyer.send(embed=notify_embed)
+            if seller:
+                await seller.send(embed=notify_embed)
+        except:
+            pass
+        
+        await interaction.channel.delete()
+
+    @app_commands.command(name="tickets")
+    @is_admin()
+    async def list_tickets(self, interaction: discord.Interaction):
+        """List all active tickets (Admin only)"""
+        active_tickets = await self.bot.db.get_active_tickets()
+        
+        if not active_tickets:
+            await interaction.response.send_message(
+                "No active tickets found.", 
+                ephemeral=True
+            )
+            return
+        
+        embed = discord.Embed(
+            title="🎫 Active Tickets",
+            color=discord.Color.blue()
+        )
+        
+        for ticket in active_tickets:
+            buyer = interaction.guild.get_member(int(ticket['buyer_id']))
+            seller = interaction.guild.get_member(int(ticket['seller_id']))
+            channel = interaction.guild.get_channel(int(ticket['channel_id']))
+            
+            if channel:
+                embed.add_field(
+                    name=f"Ticket {ticket['_id']}",
+                    value=(
+                        f"Channel: {channel.mention}\n"
+                        f"Buyer: {buyer.mention if buyer else 'Unknown'}\n"
+                        f"Seller: {seller.mention if seller else 'Unknown'}\n"
+                        f"Created: {discord.utils.format_dt(ticket['created_at'])}"
+                    ),
+                    inline=False
+                )
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @commands.Cog.listener()
+    async def on_ticket_inactive(self):
+        """Check for inactive tickets and auto-close them"""
+        while True:
+            cutoff_time = datetime.utcnow() - timedelta(hours=self.bot.config.AUTO_CLOSE_HOURS)
+            async for ticket in self.bot.db.tickets.find({'status': 'open'}):
+                channel = self.bot.get_channel(int(ticket['channel_id']))
+                if not channel:
+                    continue
+                    
+                last_message = await channel.history(limit=1).flatten()
+                if not last_message:
+                    continue
+                    
+                if last_message[0].created_at < cutoff_time:
+                    await channel.send("⚠️ This ticket has been inactive for too long and will be closed.")
+                    await asyncio.sleep(5)
+                    
+                    # Save transcript and close
+                    messages = await channel.history(limit=None, oldest_first=True).flatten()
+                    transcript_data = {
+                        'ticket_id': ticket['_id'],
+                        'channel_id': str(channel.id),
+                        'messages': [
+                            {
+                                'content': msg.content,
+                                'author_id': str(msg.author.id),
+                                'created_at': msg.created_at,
+                                'attachments': [att.url for att in msg.attachments]
+                            }
+                            for msg in messages
+                        ],
+                        'closed_at': datetime.utcnow(),
+                        'auto_closed': True
+                    }
+                    
+                    await self.bot.db.update_ticket(
+                        ticket['_id'],
+                        {
+                            'status': 'closed',
+                            'closed_at': datetime.utcnow(),
+                            'auto_closed': True
+                        }
+                    )
+                    
+                    if int(ticket['buyer_id']) in self.active_tickets:
+                        self.active_tickets.remove(int(ticket['buyer_id']))
+                    
+                    await channel.delete()
+            
+            await asyncio.sleep(3600)  # Check every hour
+
+class PaymentView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(PaymentMethodSelect())
+
+async def setup(bot):
+    await bot.add_cog(TicketManager(bot))
