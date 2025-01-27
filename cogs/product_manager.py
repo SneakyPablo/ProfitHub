@@ -105,6 +105,21 @@ class ProductManager(commands.Cog):
             ephemeral=True
         )
 
+        # Log panel creation
+        await self.bot.logger.log(
+            "🏪 Panel Created",
+            f"New product panel created by {interaction.user.mention}",
+            discord.Color.green(),
+            fields=[
+                ("Product", name, True),
+                ("Category", category or "N/A", True),
+                ("Creator", interaction.user.mention, True),
+                ("Daily Price", f"${daily_price}", True),
+                ("Monthly Price", f"${monthly_price}", True),
+                ("Lifetime Price", f"${lifetime_price}", True)
+            ]
+        )
+
     @app_commands.command(name="products")
     async def list_products(self, interaction: discord.Interaction):
         """List all products you have access to view"""
@@ -355,6 +370,18 @@ class ProductManager(commands.Cog):
             await interaction.followup.send(
                 f"Key added successfully to {product['name']} ({license_type})!", 
                 ephemeral=True
+            )
+
+            # Log key addition
+            await self.bot.logger.log(
+                "🔑 Key Added",
+                f"New key added to {product['name']}",
+                discord.Color.blue(),
+                fields=[
+                    ("Product", product['name'], True),
+                    ("License Type", license_type, True),
+                    ("Added By", interaction.user.mention, True)
+                ]
             )
         except Exception as e:
             await interaction.followup.send(
