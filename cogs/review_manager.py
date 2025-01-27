@@ -41,34 +41,14 @@ class ReviewManager(commands.Cog):
         # Update ticket with vouch
         await self.bot.db.update_ticket(ticket['_id'], {'vouched': True})
         
-        # Log the vouch
-        await self.bot.logger.log(
-            "⭐ New Vouch",
-            f"A purchase has been vouched for",
-            discord.Color.gold(),
-            fields=[
-                ("Product", (await self.bot.db.get_product(ticket['product_id']))['name'], True),
-                ("Buyer", f"<@{ticket['buyer_id']}>", True),
-                ("Seller", f"<@{ticket['seller_id']}>", True),
-                ("License", ticket.get('license_type', 'N/A'), True)
-            ]
-        )
-        
-        # Send confirmation
-        await interaction.followup.send(
-            "Thank you for vouching! Your buyer role will be kept.", 
-            ephemeral=True
-        )
-        await interaction.channel.send(
-            f"✅ {interaction.user.mention} has vouched for their purchase!"
-        )
-
-        # Create and send review panel
+        # Get product and seller info
         product = await self.bot.db.get_product(ticket['product_id'])
         seller = interaction.guild.get_member(int(ticket['seller_id']))
         
+        # Create review embed
         review_embed = discord.Embed(
             title="⭐ New Verified Purchase Review",
+            description=f"A new purchase has been vouched for!",
             color=discord.Color.gold(),
             timestamp=datetime.utcnow()
         )
@@ -108,6 +88,28 @@ class ReviewManager(commands.Cog):
         reviews_channel = self.bot.get_channel(self.bot.config.REVIEWS_CHANNEL_ID)
         if reviews_channel:
             await reviews_channel.send(embed=review_embed)
+        
+        # Log the vouch
+        await self.bot.logger.log(
+            "⭐ New Vouch",
+            f"A purchase has been vouched for",
+            discord.Color.gold(),
+            fields=[
+                ("Product", product['name'], True),
+                ("Buyer", interaction.user.mention, True),
+                ("Seller", seller.mention, True),
+                ("License", ticket['license_type'].title(), True)
+            ]
+        )
+        
+        # Send confirmation
+        await interaction.followup.send(
+            "Thank you for vouching! Your buyer role will be kept.", 
+            ephemeral=True
+        )
+        await interaction.channel.send(
+            f"✅ {interaction.user.mention} has vouched for their purchase!"
+        )
 
     @app_commands.command(name="vouches")
     async def list_vouches(self, interaction: discord.Interaction, seller: discord.Member = None):
