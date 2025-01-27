@@ -32,21 +32,25 @@ class ProductManager(commands.Cog):
         
         product_id = await self.bot.db.create_product(product_data)
         
+        features = description.split('\n')
+        features_text = ""
+        for feature in features:
+            if feature.strip():
+                features_text += f"✨ {feature.strip()}\n"
+        
         embed = discord.Embed(
             title=f"🌟 {name}",
             description=f"A premium product by {interaction.user.mention}",
             color=discord.Color.gold()
         )
         
-        features = description.split('\n')
-        features_text = ""
-        for feature in features:
-            if feature.strip():
-                features_text += f"✅ {feature.strip()}\n"
-        
         embed.add_field(
-            name="📋 Features",
-            value=features_text or "No features listed",
+            name="📋 Product Features",
+            value=(
+                "```\n"
+                f"{features_text}\n"
+                "```"
+            ),
             inline=False
         )
         
@@ -77,7 +81,7 @@ class ProductManager(commands.Cog):
 
         embed.add_field(
             name="📦 Stock Status",
-            value=f"```\n{stock_status}```",
+            value=stock_status,
             inline=True
         )
         
@@ -85,10 +89,10 @@ class ProductManager(commands.Cog):
             name="🛡️ Security & Support",
             value=(
                 "```\n"
-                "✓ Instant Delivery\n"
-                "✓ 24/7 Support\n"
-                "✓ Anti-Leak Protection\n"
-                "✓ Automatic Updates\n"
+                "✅ Instant Delivery\n"
+                "✅ 24/7 Support\n"
+                "✅ Anti-Leak Protection\n"
+                "✅ Automatic Updates\n"
                 "```"
             ),
             inline=False
