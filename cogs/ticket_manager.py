@@ -354,48 +354,6 @@ class TicketManager(commands.Cog):
         )
         await channel.send(embed=controls_embed, view=TicketControlsView())
 
-    @app_commands.command(name="vouch")
-    async def vouch(self, interaction: discord.Interaction):
-        """Vouch for a purchase"""
-        await interaction.response.defer(ephemeral=True)
-        
-        # Check if in ticket channel
-        ticket = await self.bot.db.get_ticket_by_channel(str(interaction.channel.id))
-        if not ticket:
-            await interaction.followup.send(
-                "This command can only be used in ticket channels!", 
-                ephemeral=True
-            )
-            return
-        
-        # Check if user is the buyer
-        if str(interaction.user.id) != ticket['buyer_id']:
-            await interaction.followup.send(
-                "Only the buyer can vouch for this purchase!", 
-                ephemeral=True
-            )
-            return
-        
-        # Check if already vouched
-        if ticket.get('vouched', False):
-            await interaction.followup.send(
-                "You have already vouched for this purchase!", 
-                ephemeral=True
-            )
-            return
-        
-        # Update ticket with vouch
-        await self.bot.db.update_ticket(ticket['_id'], {'vouched': True})
-        
-        # Send confirmation
-        await interaction.followup.send(
-            "Thank you for vouching! Your buyer role will be kept.", 
-            ephemeral=True
-        )
-        await interaction.channel.send(
-            f"✅ {interaction.user.mention} has vouched for their purchase!"
-        )
-
     @app_commands.command(name="ticket")
     @app_commands.describe(
         action="The action to perform",
