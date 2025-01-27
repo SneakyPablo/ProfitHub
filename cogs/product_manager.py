@@ -81,16 +81,17 @@ class ProductPanel(discord.ui.View):
                 ephemeral=True
             )
 
-class ProductManager(commands.Cog):
+class ProductManager(commands.GroupCog, name="product"):
     def __init__(self, bot):
         self.bot = bot
+        super().__init__()
 
     def is_seller():
         async def predicate(interaction: discord.Interaction):
             return interaction.guild.get_role(interaction.client.config.SELLER_ROLE_ID) in interaction.user.roles
         return app_commands.check(predicate)
 
-    @app_commands.command(name="createpanel")
+    @app_commands.command(name="create")
     @app_commands.describe(
         name="Product name",
         daily_price="Price for daily license",
@@ -100,7 +101,7 @@ class ProductManager(commands.Cog):
         category="Product category (optional)"
     )
     @is_seller()
-    async def createpanel(
+    async def create_panel(
         self, 
         interaction: discord.Interaction, 
         name: str,
