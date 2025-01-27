@@ -96,11 +96,7 @@ class ProductManager(commands.Cog):
         daily_price="Price for daily license",
         monthly_price="Price for monthly license",
         lifetime_price="Price for lifetime license",
-        feature1="Main product feature",
-        feature2="Additional feature (optional)",
-        feature3="Additional feature (optional)",
-        feature4="Additional feature (optional)",
-        feature5="Additional feature (optional)",
+        description="Product description",
         category="Product category (optional)"
     )
     @is_seller()
@@ -111,27 +107,16 @@ class ProductManager(commands.Cog):
         daily_price: float,
         monthly_price: float,
         lifetime_price: float,
-        feature1: str,
-        feature2: str = None,
-        feature3: str = None,
-        feature4: str = None,
-        feature5: str = None,
+        description: str,
         category: str = None
     ):
         """Create a new product panel"""
         await interaction.response.defer(ephemeral=True)
         
-        # Collect features
-        features = [feature1]
-        if feature2: features.append(feature2)
-        if feature3: features.append(feature3)
-        if feature4: features.append(feature4)
-        if feature5: features.append(feature5)
-        
         # Create product data
         product_data = {
             'name': name,
-            'description': "\n".join(features),
+            'description': description,
             'prices': {
                 'daily': daily_price,
                 'monthly': monthly_price,
@@ -151,14 +136,9 @@ class ProductManager(commands.Cog):
             color=discord.Color.gold()
         )
         
-        # Format features
-        features_text = ""
-        for i, feature in enumerate(features, 1):
-            features_text += f"✨ {feature}\n"
-        
         embed.add_field(
-            name="📋 Product Features",
-            value=f"```\n{features_text}```",
+            name="📋 Product Description",
+            value=f"```\n{description}```",
             inline=False
         )
         
