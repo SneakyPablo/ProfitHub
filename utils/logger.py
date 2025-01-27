@@ -7,17 +7,20 @@ class Logger:
 
     async def log(self, title, description, color=discord.Color.blue(), fields=None):
         """Send a log message to the bot logs channel"""
-        logs_channel = self.bot.get_channel(self.bot.config.BOT_LOGS_CHANNEL_ID)
-        if logs_channel:
-            embed = discord.Embed(
-                title=title,
-                description=description,
-                color=color,
-                timestamp=datetime.utcnow()
-            )
-            
-            if fields:
-                for name, value, inline in fields:
-                    embed.add_field(name=name, value=value, inline=inline)
-                    
-            await logs_channel.send(embed=embed) 
+        try:
+            logs_channel = self.bot.get_channel(self.bot.config.BOT_LOGS_CHANNEL_ID)
+            if logs_channel:
+                embed = discord.Embed(
+                    title=title,
+                    description=description,
+                    color=color,
+                    timestamp=datetime.utcnow()
+                )
+                
+                if fields:
+                    for name, value, inline in fields:
+                        embed.add_field(name=name, value=value, inline=inline)
+                        
+                await logs_channel.send(embed=embed)
+        except Exception as e:
+            print(f"Error sending log: {e}") 
