@@ -15,6 +15,10 @@ class Config:
         # Bot settings
         self.EMBED_COLOR = Color.blue()  # Default color for embeds
         self.AUTO_CLOSE_HOURS = int(os.environ.get('AUTO_CLOSE_HOURS', 48))  # Default 48 hours
+        
+        # Chat history settings
+        self.SAVE_CHAT_HISTORY = True  # Enable chat history saving
+        self.MAX_TRANSCRIPT_LENGTH = 4000  # Maximum length for embed transcript
 
     def validate(self):
         """Validate required configuration"""
