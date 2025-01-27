@@ -148,19 +148,15 @@ class ProductManager(commands.GroupCog, name="product"):
             
             # Create panel embed
             embed = discord.Embed(
-                title=f"☀️ {name}",
-                description=f"A premium product by {interaction.user.mention}",
+                title=f"🌟 {name}",
+                description=f"A premium product by {interaction.user.mention}\n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
                 color=discord.Color.gold()
             )
-
-            # Add a yellow line for aesthetics
-            embed.add_field(name="", value="▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬", inline=False)
             
-            # Format features with emojis and better spacing
+            # Format features
             features_text = ""
-            emojis = ["⭐", "✅", "💫", "🔄", "💎"]  # Custom emojis for each feature
-            for i, (emoji, feature) in enumerate(zip(emojis, features), 1):
-                features_text += f"{emoji} {feature}\n"
+            for i, feature in enumerate(features, 1):
+                features_text += f"`{i}.` {feature}\n"
             
             embed.add_field(
                 name="🔒 Product Features",
@@ -172,9 +168,9 @@ class ProductManager(commands.GroupCog, name="product"):
             embed.add_field(
                 name="💰 License Pricing",
                 value=(
-                    f"Daily License    │ ${daily_price:.2f}\n"
-                    f"Monthly License  │ ${monthly_price:.2f}\n"
-                    f"Lifetime License │ ${lifetime_price:.2f}\n"
+                    f"`Daily License    │ ${daily_price:.2f}`\n"
+                    f"`Monthly License  │ ${monthly_price:.2f}`\n"
+                    f"`Lifetime License │ ${lifetime_price:.2f}`"
                 ),
                 inline=False
             )
@@ -186,19 +182,19 @@ class ProductManager(commands.GroupCog, name="product"):
             stock_status = ""
             for license_type in ['daily', 'monthly', 'lifetime']:
                 keys = await self.bot.db.get_available_key_count(product_id, license_type)
-                emoji = "🟢" if keys > 0 else "🔴"
+                emoji = "🔴" if keys == 0 else "🟢"
                 stock_status += f"{emoji} {license_type.title()}: {keys}\n"
             
             embed.add_field(name="📦 Stock Status", value=stock_status, inline=True)
             
-            # Add security features with better formatting
+            # Add security features
             embed.add_field(
                 name="🛡️ Security & Support",
                 value=(
-                    "✅ Instant Delivery\n"
-                    "✅ 24/7 Support\n"
-                    "✅ Anti-Leak Protection\n"
-                    "✅ Automatic Updates"
+                    "`✓` Instant Delivery\n"
+                    "`✓` 24/7 Support\n"
+                    "`✓` Anti-Leak Protection\n"
+                    "`✓` Automatic Updates"
                 ),
                 inline=False
             )
