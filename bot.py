@@ -51,13 +51,13 @@ class MarketplaceBot(commands.Bot):
                 print(f'Failed to load cog {cog}: {e}')
                 traceback.print_exc()
 
-        # Clear old commands and sync new ones
+        # Sync commands
         try:
-            print("Clearing old commands...")
-            self.tree.clear_commands(guild=None)
-            print("Syncing new commands...")
-            await self.tree.sync()
-            print("Commands synced successfully!")
+            print("Syncing commands...")
+            commands = await self.tree.sync()
+            print(f"Successfully synced {len(commands)} commands!")
+            for cmd in commands:
+                print(f"- /{cmd.name}")
         except Exception as e:
             print(f"Failed to sync commands: {e}")
             traceback.print_exc()
@@ -67,16 +67,6 @@ class MarketplaceBot(commands.Bot):
         print(f'Logged in as {self.user.name}')
         print(f'Bot ID: {self.user.id}')
         print('------')
-        
-        # Sync commands
-        try:
-            print("Syncing commands...")
-            await self.tree.sync()
-            print("Commands synced successfully!")
-        except Exception as e:
-            print(f"Failed to sync commands: {e}")
-            import traceback
-            traceback.print_exc()
 
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         """Handle slash command errors"""
@@ -143,9 +133,13 @@ class MarketplaceBot(commands.Bot):
         """Manually sync slash commands (Bot owner only)"""
         try:
             print("Syncing commands...")
-            synced = await self.tree.sync()
-            await ctx.send(f"✅ Synced {len(synced)} commands!")
+            commands = await self.tree.sync()
+            print(f"Synced {len(commands)} commands:")
+            for cmd in commands:
+                print(f"- /{cmd.name}")
+            await ctx.send(f"✅ Synced {len(commands)} commands!")
         except Exception as e:
+            print(f"Error: {e}")
             await ctx.send(f"❌ Failed to sync commands: {e}")
 
 def run_bot():
