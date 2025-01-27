@@ -176,4 +176,12 @@ class Database:
                 {'seller_id': user_id}
             ]
         }).sort('created_at', -1)
+        return await cursor.to_list(length=None)
+
+    async def get_seller_vouches(self, seller_id: str):
+        """Get all vouched tickets for a seller"""
+        cursor = self.tickets.find({
+            'seller_id': seller_id,
+            'vouched': True
+        }).sort('created_at', -1)
         return await cursor.to_list(length=None) 
