@@ -18,6 +18,7 @@ class Database:
         self.tickets = self.db.tickets
         self.reviews = self.db.reviews
         self.keys = self.db.keys
+        self.messages = self.db.messages  # Added messages collection
 
     # Product Methods
     async def create_product(self, data):
@@ -106,6 +107,18 @@ class Database:
                 }
             }
         )
+
+    # Message Methods
+    async def save_message(self, data):
+        """Save a chat message"""
+        data['created_at'] = datetime.utcnow()
+        result = await self.messages.insert_one(data)
+        return result.inserted_id
+
+    async def get_ticket_messages(self, ticket_id):
+        """Get all messages for a ticket"""
+        cursor = self.messages.find({'ticket_id': ticket_id}).sort('created_at', 1)
+        return await cursor.to_list(length=None)
 
     # Cleanup method
     async def close(self):
