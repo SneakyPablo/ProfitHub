@@ -20,7 +20,7 @@ class MarketplaceBot(commands.Bot):
         super().__init__(
             command_prefix=self.config.PREFIX,
             intents=intents,
-            description="Marketplace Bot with ticket system and product management"
+            description="Marketplace Bot"
         )
         
         self.db = Database()
@@ -32,18 +32,17 @@ class MarketplaceBot(commands.Bot):
         
         # Load cogs in specific order
         cogs = [
-            'ticket_manager',  # Load this first
-            'review_manager',  # Then load review manager
-            'product_manager'  # Load product manager last
+            'cogs.ticket_manager',
+            'cogs.review_manager',
+            'cogs.product_manager'
         ]
         
         for cog in cogs:
             try:
-                await self.load_extension(f'cogs.{cog}')
+                await self.load_extension(cog)
                 print(f'Loaded cog: {cog}')
             except Exception as e:
                 print(f'Failed to load cog {cog}: {e}')
-                # Print more detailed error information
                 import traceback
                 traceback.print_exc()
 
@@ -53,51 +52,12 @@ class MarketplaceBot(commands.Bot):
         print(f'Bot ID: {self.user.id}')
         print('------')
         
-        # Set bot status
-        await self.change_presence(
-            activity=discord.Activity(
-                type=discord.ActivityType.watching,
-                name=f"{self.config.PREFIX}help | Marketplace"
-            ),
-            status=discord.Status.online
-        )
-        
-        # Add a development check for command syncing
-        if self.config.DEV_MODE:  # Only sync in development mode
-            try:
-                print("Syncing commands...")
-                await self.tree.sync()
-                print("Commands synced successfully!")
-            except Exception as e:
-                print(f"Failed to sync commands: {e}")
-
-    async def on_command_error(self, ctx, error):
-        """Global error handler"""
-        if isinstance(error, commands.CommandNotFound):
-            return
-        elif isinstance(error, commands.MissingPermissions):
-            await ctx.send("You don't have permission to use this command!")
-        elif isinstance(error, commands.MissingRole):
-            await ctx.send(f"You need the required role to use this command!")
-        else:
-            print(f'Error in command {ctx.command}: {error}')
-
-    async def close(self):
-        """Cleanup when bot shuts down"""
-        print("Bot is shutting down...")
-        await self.db.close()
-        await super().close()
-
-    @commands.is_owner()
-    @commands.command(name="sync")
-    async def sync_commands(self, ctx):
-        """Manually sync slash commands (Bot owner only)"""
         try:
             print("Syncing commands...")
-            synced = await self.tree.sync()
-            await ctx.send(f"✅ Synced {len(synced)} commands!")
+            await self.tree.sync()
+            print("Commands synced successfully!")
         except Exception as e:
-            await ctx.send(f"❌ Failed to sync commands: {e}")
+            print(f"Failed to sync commands: {e}")
 
 def run_bot():
     """Initialize and run the bot"""
@@ -109,4 +69,4 @@ def run_bot():
         print(f"Failed to start bot: {e}")
 
 if __name__ == "__main__":
-    run_bot() 
+    run_bot()
