@@ -152,62 +152,64 @@ class ProductManager(commands.GroupCog, name="product"):
                 title=f"☀️ \"{name}\"",
                 description=(
                     f"A premium product by {interaction.user.mention}\n"
-                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
                 ),
                 color=0x2f3136  # Dark theme color
             )
 
-            # Add features with numbering and emojis
+            # Features section
             features_text = ""
             feature_emojis = ["✨", "🔧", "🚀", "💎", "⚡"]
             for i, (emoji, feature) in enumerate(zip(feature_emojis, features), 1):
-                features_text += f"{i}. {emoji} {feature}\n"
-
+                features_text += f"{emoji} {feature}\n"
             embed.add_field(
-                name="🔒 Product Features",
-                value=features_text,
+                name="",
+                value=f"__**Product Features:**__\n{features_text}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n",
                 inline=False
             )
 
-            # Add pricing with clean monospace formatting
+            # Pricing section
             embed.add_field(
-                name="💰 License Pricing",
+                name="",
                 value=(
-                    "```\n"
+                    "__**License Pricing:**__\n"
+                    f"```\n"
                     f"Daily License    │ ${daily_price:.2f}\n"
                     f"Monthly License  │ ${monthly_price:.2f}\n"
                     f"Lifetime License │ ${lifetime_price:.2f}\n"
-                    "```"
+                    "```\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 ),
                 inline=False
             )
 
-            # Add stock status
+            # Stock status section
             stock_status = ""
             for license_type in ['daily', 'monthly', 'lifetime']:
                 keys = await self.bot.db.get_available_key_count(product_id, license_type)
                 emoji = "🔴" if keys == 0 else "🟢"
                 stock_status += f"{emoji} {license_type.title()}: {keys}\n"
-
             embed.add_field(
-                name="📦 Stock Status",
-                value=stock_status,
+                name="",
+                value=f"__**Stock Status:**__\n{stock_status}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n",
                 inline=False
             )
 
-            # Add security features
+            # Security & Support section
             embed.add_field(
-                name="🛡️ Security & Support",
+                name="",
                 value=(
-                    "✓ Instant Delivery\n"
-                    "✓ 24/7 Support\n"
-                    "✓ Anti-Leak Protection\n"
-                    "✓ Automatic Updates"
+                    "__**Security & Support:**__\n"
+                    "✅ Instant Delivery\n"
+                    "✅ 24/7 Support\n"
+                    "✅ Anti-Leak Protection\n"
+                    "✅ Automatic Updates\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 ),
                 inline=False
             )
 
-            # Add product ID at bottom
+            # Product ID at bottom
             embed.add_field(
                 name="",
                 value=f"Product ID: {product_id} • Created: <t:{int(datetime.now().timestamp())}:R>",
@@ -374,28 +376,37 @@ class ProductManager(commands.GroupCog, name="product"):
             
             # Update panel stock display
             try:
-                async for message in interaction.channel.history(limit=100):
-                    if (message.author == self.bot.user and 
-                        len(message.embeds) > 0 and 
-                        str(product_id) in message.embeds[0].footer.text):
-                        embed = message.embeds[0]
-                        
-                        stock_status = ""
-                        for ltype in ['daily', 'monthly', 'lifetime']:
-                            keys = await self.bot.db.get_available_key_count(product_id, ltype)
-                            emoji = "🟢" if keys > 0 else "🔴"
-                            stock_status += f"{emoji} {ltype.title()}: {keys}\n"
-                        
-                        for i, field in enumerate(embed.fields):
-                            if field.name == "📦 Stock Status":
-                                embed.set_field_at(
-                                    i,
-                                    name="📦 Stock Status",
-                                    value=stock_status,
-                                    inline=True
-                                )
-                                await message.edit(embed=embed)
-                                break
+                found = False
+                for channel in interaction.guild.channels:
+                    async for message in channel.history(limit=100):
+                        if (message.author == self.bot.user and 
+                            len(message.embeds) > 0 and 
+                            str(product_id) in message.embeds[0].to_dict().get('fields', [])[-1].get('value', '')):
+                            embed = message.embeds[0]
+                            
+                            # Update stock status
+                            stock_status = ""
+                            for ltype in ['daily', 'monthly', 'lifetime']:
+                                keys = await self.bot.db.get_available_key_count(product_id, ltype)
+                                emoji = "🔴" if keys == 0 else "🟢"
+                                stock_status += f"{emoji} {ltype.title()}: {keys}\n"
+                            
+                            # Find and update the stock status field
+                            for i, field in enumerate(embed.fields):
+                                if "Stock Status" in field.value:
+                                    embed.set_field_at(
+                                        i,
+                                        name="",
+                                        value=f"__**Stock Status:**__\n{stock_status}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n",
+                                        inline=False
+                                    )
+                                    await message.edit(embed=embed)
+                                    found = True
+                                    break
+                        if found:
+                            break
+                    if found:
+                        break
             except Exception as e:
                 print(f"Error updating panel: {e}")
 
