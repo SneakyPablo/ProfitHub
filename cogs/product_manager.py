@@ -172,10 +172,10 @@ class ProductManager(commands.GroupCog, name="product"):
             embed.add_field(
                 name="💰 License Pricing",
                 value=(
-                    "```ml\n"
-                    f"[2;37mDaily License[0m [2;37m|[0m [2;37m$[0m{daily_price:.2f}\n"
-                    f"[2;37mMonthly License[0m [2;37m|[0m [2;37m$[0m{monthly_price:.2f}\n"
-                    f"[2;37mLifetime License[0m [2;37m|[0m [2;37m$[0m{lifetime_price:.2f}\n"
+                    "```\n"
+                    f"Daily License    | ${daily_price:.2f}\n"
+                    f"Monthly License  | ${monthly_price:.2f}\n"
+                    f"Lifetime License | ${lifetime_price:.2f}\n"
                     "```"
                 ),
                 inline=False
