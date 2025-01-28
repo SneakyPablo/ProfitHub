@@ -149,12 +149,12 @@ class ProductManager(commands.GroupCog, name="product"):
             
             # Create panel embed
             embed = discord.Embed(
-                title=f"☀️ \"{name}\"",
+                title=f"🌟 {name}",
                 description=(
                     f"A premium product by {interaction.user.mention}\n"
-                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
                 ),
-                color=0x2f3136  # Dark theme color
+                color=0xf1c40f  # Back to gold/yellow color
             )
 
             # Features section
@@ -163,22 +163,20 @@ class ProductManager(commands.GroupCog, name="product"):
             for i, (emoji, feature) in enumerate(zip(feature_emojis, features), 1):
                 features_text += f"{emoji} {feature}\n"
             embed.add_field(
-                name="",
-                value=f"__**Product Features:**__\n{features_text}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n",
+                name="📋 Product Features",
+                value=features_text + "\n",
                 inline=False
             )
 
-            # Pricing section
+            # Pricing section with dark background
             embed.add_field(
-                name="",
+                name="💰 License Pricing",
                 value=(
-                    "__**License Pricing:**__\n"
-                    f"```\n"
-                    f"Daily License    │ ${daily_price:.2f}\n"
-                    f"Monthly License  │ ${monthly_price:.2f}\n"
-                    f"Lifetime License │ ${lifetime_price:.2f}\n"
+                    "```ansi\n"
+                    f"[2;37mDaily License[0m    [2;37m│[0m [2;33m${daily_price:.2f}[0m\n"
+                    f"[2;37mMonthly License[0m  [2;37m│[0m [2;33m${monthly_price:.2f}[0m\n"
+                    f"[2;37mLifetime License[0m [2;37m│[0m [2;33m${lifetime_price:.2f}[0m\n"
                     "```\n"
-                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 ),
                 inline=False
             )
@@ -190,21 +188,21 @@ class ProductManager(commands.GroupCog, name="product"):
                 emoji = "🔴" if keys == 0 else "🟢"
                 stock_status += f"{emoji} {license_type.title()}: {keys}\n"
             embed.add_field(
-                name="",
-                value=f"__**Stock Status:**__\n{stock_status}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n",
+                name="📦 Stock Status",
+                value=f"```\n{stock_status}```",
                 inline=False
             )
 
             # Security & Support section
             embed.add_field(
-                name="",
+                name="🛡️ Security & Support",
                 value=(
-                    "__**Security & Support:**__\n"
-                    "✅ Instant Delivery\n"
-                    "✅ 24/7 Support\n"
-                    "✅ Anti-Leak Protection\n"
-                    "✅ Automatic Updates\n"
-                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "```\n"
+                    "✓ Instant Delivery\n"
+                    "✓ 24/7 Support\n"
+                    "✓ Anti-Leak Protection\n"
+                    "✓ Automatic Updates\n"
+                    "```"
                 ),
                 inline=False
             )
