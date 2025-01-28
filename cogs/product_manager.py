@@ -64,17 +64,71 @@ class ProductPanel(discord.ui.View):
             )
             return
 
-        # Create ticket
-        ticket_manager = interaction.client.get_cog('TicketManager')
-        if not ticket_manager:
+        try:
+            # Get product info
+            product = await interaction.client.db.get_product(ObjectId(self.product_id))
+            if not product:
+                await interaction.followup.send("Product not found!", ephemeral=True)
+                return
+
+            # Create ticket channel
+            category = interaction.guild.get_channel(interaction.client.config.TICKET_CATEGORY_ID)
+            if not category:
+                await interaction.followup.send(
+                    "Ticket category not found. Please contact an administrator.", 
+                    ephemeral=True
+                )
+                return
+
+            # Create ticket channel
+            channel_name = f"ticket-{interaction.user.name}-{product['name'][:10]}"
+            ticket_channel = await category.create_text_channel(
+                name=channel_name,
+                topic=f"Ticket for {product['name']} - {license_type} license"
+            )
+
+            # Set permissions
+            await ticket_channel.set_permissions(interaction.guild.default_role, read_messages=False)
+            await ticket_channel.set_permissions(interaction.user, read_messages=True, send_messages=True)
+            seller = interaction.guild.get_member(int(product['seller_id']))
+            if seller:
+                await ticket_channel.set_permissions(seller, read_messages=True, send_messages=True)
+
+            # Create ticket in database
+            ticket_data = {
+                'channel_id': str(ticket_channel.id),
+                'buyer_id': str(interaction.user.id),
+                'seller_id': product['seller_id'],
+                'product_id': ObjectId(self.product_id),
+                'license_type': license_type
+            }
+            await interaction.client.db.create_ticket(ticket_data)
+
+            # Send initial message
+            embed = discord.Embed(
+                title="🎫 New Purchase Ticket",
+                description=(
+                    f"Welcome {interaction.user.mention}!\n\n"
+                    f"Product: **{product['name']}**\n"
+                    f"License: **{license_type.title()}**\n"
+                    f"Price: **${product['prices'][license_type]}**\n\n"
+                    "Please select your payment method below."
+                ),
+                color=discord.Color.blue()
+            )
+
+            view = PaymentMethodSelect()
+            await ticket_channel.send(
+                f"{interaction.user.mention} {seller.mention}",
+                embed=embed,
+                view=view
+            )
+
             await interaction.followup.send(
-                "Error: Ticket system is currently unavailable. Please contact an administrator.", 
+                f"Ticket created! Please check {ticket_channel.mention}",
                 ephemeral=True
             )
-            return
 
-        try:
-            await ticket_manager.create_ticket(interaction, self.product_id, license_type)
         except Exception as e:
             print(f"Error creating ticket: {e}")
             await interaction.followup.send(
@@ -159,12 +213,17 @@ class ProductManager(commands.GroupCog, name="product"):
 
             # Features section
             features_text = ""
-            feature_emojis = ["✨", "🔧", "🚀", "💎", "⚡"]
-            for i, (emoji, feature) in enumerate(zip(feature_emojis, features), 1):
+            feature_emojis = ["⚡", "🎮", "🔧", "🎯", "💫"]
+            for emoji, feature in zip(feature_emojis, features):
                 features_text += f"{emoji} {feature}\n"
+
             embed.add_field(
                 name="📋 Product Features",
-                value=features_text + "\n",
+                value=(
+                    "```ansi\n"
+                    f"{features_text}"
+                    "```"
+                ),
                 inline=False
             )
 
@@ -374,12 +433,11 @@ class ProductManager(commands.GroupCog, name="product"):
             
             # Update panel stock display
             try:
-                found = False
                 for channel in interaction.guild.channels:
                     async for message in channel.history(limit=100):
                         if (message.author == self.bot.user and 
                             len(message.embeds) > 0 and 
-                            str(product_id) in message.embeds[0].to_dict().get('fields', [])[-1].get('value', '')):
+                            str(product_id) in message.embeds[0].footer.text):
                             embed = message.embeds[0]
                             
                             # Update stock status
@@ -391,20 +449,15 @@ class ProductManager(commands.GroupCog, name="product"):
                             
                             # Find and update the stock status field
                             for i, field in enumerate(embed.fields):
-                                if "Stock Status" in field.value:
+                                if field.name == "📦 Stock Status":
                                     embed.set_field_at(
                                         i,
-                                        name="",
-                                        value=f"__**Stock Status:**__\n{stock_status}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n",
+                                        name="📦 Stock Status",
+                                        value=f"```\n{stock_status}```",
                                         inline=False
                                     )
                                     await message.edit(embed=embed)
-                                    found = True
                                     break
-                        if found:
-                            break
-                    if found:
-                        break
             except Exception as e:
                 print(f"Error updating panel: {e}")
 
