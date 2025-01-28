@@ -3,6 +3,81 @@ from discord.ext import commands
 from discord import app_commands
 from bson import ObjectId
 from datetime import datetime
+import traceback
+
+class PaymentMethodSelect(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(PaymentDropdown())
+
+class PaymentDropdown(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(
+                label="PayPal",
+                description="Pay with PayPal",
+                emoji="💰",
+                value="paypal"
+            ),
+            discord.SelectOption(
+                label="Crypto",
+                description="Pay with Cryptocurrency",
+                emoji="💎",
+                value="crypto"
+            ),
+            discord.SelectOption(
+                label="Bank Transfer",
+                description="Pay with Bank Transfer",
+                emoji="🏦",
+                value="bank"
+            )
+        ]
+        super().__init__(
+            placeholder="Select payment method...",
+            min_values=1,
+            max_values=1,
+            options=options,
+            custom_id="payment_select"
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        
+        payment_info = interaction.client.config.PAYMENT_INFO.get(self.values[0], "Payment information not available")
+        
+        embed = discord.Embed(
+            title="💳 Payment Information",
+            description=f"Please send payment using the following details:\n\n{payment_info}",
+            color=discord.Color.green()
+        )
+        embed.set_footer(text="After sending payment, click 'Confirm Payment' below")
+        
+        view = ConfirmPaymentView()
+        await interaction.followup.send(embed=embed, view=view)
+        self.disabled = True
+        await interaction.message.edit(view=self.view)
+
+class ConfirmPaymentView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Confirm Payment", style=discord.ButtonStyle.success, custom_id="confirm_payment")
+    async def confirm_payment(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        
+        ticket = await interaction.client.db.get_ticket_by_channel(str(interaction.channel.id))
+        seller = interaction.guild.get_member(int(ticket['seller_id']))
+        
+        embed = discord.Embed(
+            title="💰 Payment Confirmation",
+            description="The buyer has confirmed their payment. Please verify and deliver the product.",
+            color=discord.Color.gold()
+        )
+        
+        view = SellerConfirmationView()
+        await interaction.channel.send(f"{seller.mention}", embed=embed, view=view)
+        button.disabled = True
+        await interaction.message.edit(view=self)
 
 class ProductPanel(discord.ui.View):
     def __init__(self, product_id: str):
@@ -434,32 +509,37 @@ class ProductManager(commands.GroupCog, name="product"):
             # Update panel stock display
             try:
                 for channel in interaction.guild.channels:
-                    async for message in channel.history(limit=100):
-                        if (message.author == self.bot.user and 
-                            len(message.embeds) > 0 and 
-                            str(product_id) in message.embeds[0].footer.text):
-                            embed = message.embeds[0]
-                            
-                            # Update stock status
-                            stock_status = ""
-                            for ltype in ['daily', 'monthly', 'lifetime']:
-                                keys = await self.bot.db.get_available_key_count(product_id, ltype)
-                                emoji = "🔴" if keys == 0 else "🟢"
-                                stock_status += f"{emoji} {ltype.title()}: {keys}\n"
-                            
-                            # Find and update the stock status field
-                            for i, field in enumerate(embed.fields):
-                                if field.name == "📦 Stock Status":
-                                    embed.set_field_at(
-                                        i,
-                                        name="📦 Stock Status",
-                                        value=f"```\n{stock_status}```",
-                                        inline=False
-                                    )
-                                    await message.edit(embed=embed)
-                                    break
+                    if isinstance(channel, discord.TextChannel):  # Make sure it's a text channel
+                        async for message in channel.history(limit=100):
+                            if (message.author == self.bot.user and 
+                                message.embeds and  # Check if embeds exist
+                                message.embeds[0].footer and  # Check if footer exists
+                                message.embeds[0].footer.text and  # Check if footer text exists
+                                str(product_id) in message.embeds[0].footer.text):
+                                
+                                embed = message.embeds[0]
+                                
+                                # Update stock status
+                                stock_status = ""
+                                for ltype in ['daily', 'monthly', 'lifetime']:
+                                    keys = await self.bot.db.get_available_key_count(product_id, ltype)
+                                    emoji = "🔴" if keys == 0 else "🟢"
+                                    stock_status += f"{emoji} {ltype.title()}: {keys}\n"
+                                
+                                # Find and update the stock status field
+                                for i, field in enumerate(embed.fields):
+                                    if field.name == "📦 Stock Status":
+                                        embed.set_field_at(
+                                            i,
+                                            name="📦 Stock Status",
+                                            value=f"```\n{stock_status}```",
+                                            inline=False
+                                        )
+                                        await message.edit(embed=embed)
+                                        break
             except Exception as e:
                 print(f"Error updating panel: {e}")
+                print(f"Full error details: {traceback.format_exc()}")
 
             await interaction.followup.send(
                 f"Key added successfully to {product['name']} ({license_type})!", 
