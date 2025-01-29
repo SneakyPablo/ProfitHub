@@ -3,6 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 from datetime import datetime
 from bson import ObjectId
+from cogs.product_manager import MARKETPLACE_NAME, MARKETPLACE_ICON
 
 class ReviewManager(commands.GroupCog, name="review"):
     def __init__(self, bot):
@@ -83,7 +84,10 @@ class ReviewManager(commands.GroupCog, name="review"):
             inline=True
         )
         
-        review_embed.set_footer(text=f"Seller ID: {seller.id}")
+        review_embed.set_footer(
+            text=f"{MARKETPLACE_NAME} • Trusted Reviews",
+            icon_url=MARKETPLACE_ICON
+        )
         
         # Send to reviews channel
         reviews_channel = self.bot.get_channel(self.bot.config.REVIEWS_CHANNEL_ID)
