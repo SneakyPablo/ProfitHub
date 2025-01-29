@@ -5,6 +5,11 @@ from bson import ObjectId
 from datetime import datetime
 import traceback
 
+# Add these constants at the top of the file, after the imports
+MARKETPLACE_ICON = "https://i.imgur.com/WZZPViy.png"  # Replace with your icon URL
+MARKETPLACE_BANNER = "https://i.imgur.com/WZZPViy.png"  # Replace with your banner URL
+MARKETPLACE_NAME = "Profit Hub Marketplace"  # Your marketplace name
+
 class PaymentMethodSelect(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -307,9 +312,20 @@ class ProductManager(commands.GroupCog, name="product"):
                 title=f"🌟 {name}",
                 description=(
                     f"A premium product by {interaction.user.mention}\n"
+                    f"*Powered by {MARKETPLACE_NAME}*\n"
                     "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
                 ),
-                color=0xf1c40f  # Back to gold/yellow color
+                color=0xf1c40f
+            )
+
+            # Add watermark as thumbnail
+            embed.set_thumbnail(url=MARKETPLACE_ICON)
+
+            # Add watermark text at the top
+            embed.add_field(
+                name="",
+                value=f"*Powered by {MARKETPLACE_NAME}*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+                inline=False
             )
 
             # Features section
@@ -367,11 +383,10 @@ class ProductManager(commands.GroupCog, name="product"):
                 inline=False
             )
 
-            # Product ID at bottom
-            embed.add_field(
-                name="",
-                value=f"Product ID: {product_id} • Created: <t:{int(datetime.now().timestamp())}:R>",
-                inline=False
+            # Add bottom watermark with product ID
+            embed.set_footer(
+                text=f"Product ID: {product_id} • {MARKETPLACE_NAME}",
+                icon_url=MARKETPLACE_ICON
             )
 
             # Create and send panel
