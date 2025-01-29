@@ -79,6 +79,32 @@ class ConfirmPaymentView(discord.ui.View):
         button.disabled = True
         await interaction.message.edit(view=self)
 
+class SellerConfirmationView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Confirm Payment & Deliver", style=discord.ButtonStyle.success, custom_id="seller_confirm")
+    async def confirm_and_deliver(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        
+        ticket = await interaction.client.db.get_ticket_by_channel(str(interaction.channel.id))
+        if str(interaction.user.id) != ticket['seller_id']:
+            await interaction.followup.send("Only the seller can confirm the payment!", ephemeral=True)
+            return
+            
+        key = await interaction.client.db.get_available_key(
+            ticket['product_id'], 
+            ticket['license_type']
+        )
+        if not key:
+            await interaction.followup.send(
+                "Error: No available keys for this product type!", 
+                ephemeral=True
+            )
+            return
+
+        # Rest of the delivery logic...
+
 class ProductPanel(discord.ui.View):
     def __init__(self, product_id: str):
         super().__init__(timeout=None)
@@ -497,7 +523,7 @@ class ProductManager(commands.GroupCog, name="product"):
                 return
 
             key_data = {
-                'product_id': product['_id'],
+                'product_id': ObjectId(product_id),  # Make sure it's ObjectId
                 'key': key,
                 'license_type': license_type.lower(),
                 'seller_id': str(interaction.user.id),
@@ -508,17 +534,15 @@ class ProductManager(commands.GroupCog, name="product"):
             
             # Update panel stock display
             try:
-                for channel in interaction.guild.channels:
-                    if isinstance(channel, discord.TextChannel):  # Make sure it's a text channel
-                        async for message in channel.history(limit=100):
-                            if (message.author == self.bot.user and 
-                                message.embeds and  # Check if embeds exist
-                                message.embeds[0].footer and  # Check if footer exists
-                                message.embeds[0].footer.text and  # Check if footer text exists
-                                str(product_id) in message.embeds[0].footer.text):
-                                
-                                embed = message.embeds[0]
-                                
+                for channel in interaction.guild.text_channels:  # Only search text channels
+                    async for message in channel.history(limit=100):
+                        if (message.author == self.bot.user and 
+                            len(message.embeds) > 0):
+                            embed = message.embeds[0]
+                            
+                            # Check if this is the right product panel
+                            footer_text = embed.footer.text if embed.footer else ""
+                            if f"Product ID: {product_id}" in footer_text:
                                 # Update stock status
                                 stock_status = ""
                                 for ltype in ['daily', 'monthly', 'lifetime']:
@@ -537,9 +561,9 @@ class ProductManager(commands.GroupCog, name="product"):
                                         )
                                         await message.edit(embed=embed)
                                         break
+                                break  # Stop searching after finding the panel
             except Exception as e:
                 print(f"Error updating panel: {e}")
-                print(f"Full error details: {traceback.format_exc()}")
 
             await interaction.followup.send(
                 f"Key added successfully to {product['name']} ({license_type})!", 
