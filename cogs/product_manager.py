@@ -8,7 +8,7 @@ import asyncio
 
 # Add these constants at the top of the file, after the imports
 MARKETPLACE_ICON = "https://i.imgur.com/WZZPViy.png"  # Replace with your direct image link
-MARKETPLACE_BANNER = "https://i.imgur.com/WZZPViy.png"  # Replace with your direct image link
+MARKETPLACE_BANNER = "https://i.imgur.com/abcd123.png"  # Replace with your direct image link
 MARKETPLACE_NAME = "Shadow Marketplace"  # Your marketplace name
 
 class PaymentMethodSelect(discord.ui.View):
@@ -198,6 +198,73 @@ class SellerConfirmationView(discord.ui.View):
             await interaction.followup.send(f"Error delivering product: {str(e)}", ephemeral=True)
             print(f"Error in confirm_and_deliver: {e}")
 
+class BuyConfirmView(discord.ui.View):
+    def __init__(self, product_id: str, license_type: str, price: float):
+        super().__init__(timeout=60)  # 60 second timeout
+        self.product_id = product_id
+        self.license_type = license_type
+        self.price = price
+
+    @discord.ui.button(label="Confirm Purchase", style=discord.ButtonStyle.success)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Create the ticket after confirmation
+        product = await interaction.client.db.get_product(ObjectId(self.product_id))
+        seller = interaction.guild.get_member(int(product['seller_id']))
+        
+        # Create ticket channel
+        category = interaction.guild.get_channel(interaction.client.config.TICKET_CATEGORY_ID)
+        if not category:
+            await interaction.response.send_message("Ticket category not found!", ephemeral=True)
+            return
+
+        channel_name = f"ticket-{interaction.user.name}-{self.license_type}"
+        ticket_channel = await category.create_text_channel(name=channel_name)
+        
+        # Set permissions
+        await ticket_channel.set_permissions(interaction.guild.default_role, read_messages=False)
+        await ticket_channel.set_permissions(interaction.user, read_messages=True, send_messages=True)
+        await ticket_channel.set_permissions(seller, read_messages=True, send_messages=True)
+        
+        # Create ticket in database
+        ticket_data = {
+            'channel_id': str(ticket_channel.id),
+            'buyer_id': str(interaction.user.id),
+            'seller_id': product['seller_id'],
+            'product_id': self.product_id,
+            'license_type': self.license_type,
+            'status': 'open',
+            'created_at': datetime.utcnow()
+        }
+        await interaction.client.db.create_ticket(ticket_data)
+        
+        # Send initial message
+        embed = discord.Embed(
+            title="🎫 New Purchase Ticket",
+            description=(
+                f"Welcome {interaction.user.mention}!\n\n"
+                f"Product: **{product['name']}**\n"
+                f"License: **{self.license_type.title()}**\n"
+                f"Price: **${self.price:.2f}**\n\n"
+                "Please select your payment method below."
+            ),
+            color=interaction.client.config.EMBED_COLOR
+        )
+        embed.set_footer(text=f"{MARKETPLACE_NAME} • Secure Transaction", icon_url=MARKETPLACE_ICON)
+        
+        view = PaymentMethodSelect()
+        await ticket_channel.send(f"{interaction.user.mention} {seller.mention}", embed=embed, view=view)
+        
+        await interaction.response.send_message(
+            f"Ticket created! Please go to {ticket_channel.mention}", 
+            ephemeral=True
+        )
+        self.stop()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("Purchase cancelled!", ephemeral=True)
+        self.stop()
+
 class ProductPanel(discord.ui.View):
     def __init__(self, product_id: str):
         super().__init__(timeout=None)
@@ -205,15 +272,15 @@ class ProductPanel(discord.ui.View):
 
     @discord.ui.button(label="Buy Daily", style=discord.ButtonStyle.success)
     async def buy_daily(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.create_purchase_ticket(interaction, "daily")
+        await self.show_confirmation(interaction, "daily")
 
     @discord.ui.button(label="Buy Monthly", style=discord.ButtonStyle.success)
     async def buy_monthly(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.create_purchase_ticket(interaction, "monthly")
+        await self.show_confirmation(interaction, "monthly")
 
     @discord.ui.button(label="Buy Lifetime", style=discord.ButtonStyle.success)
     async def buy_lifetime(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.create_purchase_ticket(interaction, "lifetime")
+        await self.show_confirmation(interaction, "lifetime")
 
     @discord.ui.button(label="Request Info", style=discord.ButtonStyle.primary)
     async def request_info(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -246,89 +313,30 @@ class ProductPanel(discord.ui.View):
         
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-    async def create_purchase_ticket(self, interaction: discord.Interaction, license_type: str):
+    async def show_confirmation(self, interaction: discord.Interaction, license_type: str):
         await interaction.response.defer(ephemeral=True)
         
-        # Check stock
-        keys = await interaction.client.db.get_available_key_count(self.product_id, license_type)
-        if keys == 0:
-            await interaction.followup.send(
-                f"Sorry, {license_type} licenses are currently out of stock!", 
-                ephemeral=True
-            )
+        product = await interaction.client.db.get_product(ObjectId(self.product_id))
+        if not product:
+            await interaction.followup.send("Product not found!", ephemeral=True)
             return
-
-        try:
-            # Get product info
-            product = await interaction.client.db.get_product(ObjectId(self.product_id))
-            if not product:
-                await interaction.followup.send("Product not found!", ephemeral=True)
-                return
-
-            # Create ticket channel
-            category = interaction.guild.get_channel(interaction.client.config.TICKET_CATEGORY_ID)
-            if not category:
-                await interaction.followup.send(
-                    "Ticket category not found. Please contact an administrator.", 
-                    ephemeral=True
-                )
-                return
-
-            # Create ticket channel
-            channel_name = f"ticket-{interaction.user.name}-{product['name'][:10]}"
-            ticket_channel = await category.create_text_channel(
-                name=channel_name,
-                topic=f"Ticket for {product['name']} - {license_type} license"
-            )
-
-            # Set permissions
-            await ticket_channel.set_permissions(interaction.guild.default_role, read_messages=False)
-            await ticket_channel.set_permissions(interaction.user, read_messages=True, send_messages=True)
-            seller = interaction.guild.get_member(int(product['seller_id']))
-            if seller:
-                await ticket_channel.set_permissions(seller, read_messages=True, send_messages=True)
-
-            # Create ticket in database
-            ticket_data = {
-                'channel_id': str(ticket_channel.id),
-                'buyer_id': str(interaction.user.id),
-                'seller_id': product['seller_id'],
-                'product_id': ObjectId(self.product_id),
-                'license_type': license_type
-            }
-            await interaction.client.db.create_ticket(ticket_data)
-
-            # Send initial message
-            embed = discord.Embed(
-                title="🎫 New Purchase Ticket",
-                description=(
-                    f"Welcome {interaction.user.mention}!\n\n"
-                    f"Product: **{product['name']}**\n"
-                    f"License: **{license_type.title()}**\n"
-                    f"Price: **${product['prices'][license_type]}**\n\n"
-                    "Please select your payment method below."
-                ),
-                color=discord.Color.blue()
-            )
-
-            view = PaymentMethodSelect()
-            await ticket_channel.send(
-                f"{interaction.user.mention} {seller.mention}",
-                embed=embed,
-                view=view
-            )
-
-            await interaction.followup.send(
-                f"Ticket created! Please check {ticket_channel.mention}",
-                ephemeral=True
-            )
-
-        except Exception as e:
-            print(f"Error creating ticket: {e}")
-            await interaction.followup.send(
-                "An error occurred while creating your ticket. Please try again or contact an administrator.",
-                ephemeral=True
-            )
+            
+        price = product['prices'][license_type]
+        
+        embed = discord.Embed(
+            title="🛒 Confirm Purchase",
+            description=(
+                f"You are about to purchase:\n\n"
+                f"**{product['name']}**\n"
+                f"License Type: **{license_type.title()}**\n"
+                f"Price: **${price:.2f}**\n\n"
+                "Are you sure you want to proceed?"
+            ),
+            color=interaction.client.config.EMBED_COLOR
+        )
+        
+        view = BuyConfirmView(self.product_id, license_type, price)
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
 class ProductManager(commands.GroupCog, name="product"):
     def __init__(self, bot):
@@ -395,52 +403,57 @@ class ProductManager(commands.GroupCog, name="product"):
             # Create product in database
             product_id = await self.bot.db.create_product(product_data)
             
-            # Create panel embed with minimal width
+            # Create panel embed
             embed = discord.Embed(
                 title=f"🌟 {name}",
-                description=f"A premium product by {interaction.user.mention}",
+                description=(
+                    f"A premium product by {interaction.user.mention}\n"
+                    f"*Powered by {MARKETPLACE_NAME}*\n"
+                    "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
+                ),
                 color=0xf1c40f
             )
 
-            # Set thumbnail with minimal width
+            # Set thumbnail position to left
             embed.set_thumbnail(url=MARKETPLACE_ICON)
+            embed.thumbnail.width = 40  # Make thumbnail smaller and move left
+            embed.thumbnail.height = 40
 
-            # Features section - minimal width
+            # Features section
             features_text = ""
             feature_emojis = ["⚡", "🎮", "🔧", "🎯", "💫"]
             for emoji, feature in zip(feature_emojis, features):
-                if feature:
-                    features_text += f"{emoji}{feature}\n"
+                features_text += f"{emoji} {feature}\n"
 
             embed.add_field(
-                name="📋 Features",
-                value=f"```{features_text.strip()}```",
+                name="📋 Product Features",
+                value=f"```ansi\n{features_text}```",
                 inline=False
             )
 
-            # Pricing section - minimal width
+            # Pricing section
             pricing_text = ""
             for license_type, price in [
-                ('Daily', daily_price),
-                ('Monthly', monthly_price),
-                ('Lifetime', lifetime_price)
+                ('daily', daily_price),
+                ('monthly', monthly_price),
+                ('lifetime', lifetime_price)
             ]:
-                keys = await self.bot.db.get_available_key_count(product_id, license_type.lower())
+                keys = await self.bot.db.get_available_key_count(product_id, license_type)
                 color_code = "\u001b[32;1m" if keys > 0 else "\u001b[31;1m"
-                pricing_text += f"{license_type}|{color_code}${price:.2f}\u001b[0m\n"
+                pricing_text += f"{license_type.title()} License | {color_code}${price:.2f}\u001b[0m\n"
 
             embed.add_field(
-                name="💰 Pricing",
-                value=f"```ansi\n{pricing_text.strip()}```",
+                name="💰 License Pricing",
+                value=f"```ansi\n{pricing_text}```",
                 inline=False
             )
 
-            # Stock status - minimal width
+            # Stock status
             stock_status = ""
-            for license_type in ['Daily', 'Monthly', 'Lifetime']:
-                keys = await self.bot.db.get_available_key_count(product_id, license_type.lower())
+            for license_type in ['daily', 'monthly', 'lifetime']:
+                keys = await self.bot.db.get_available_key_count(product_id, license_type)
                 emoji = "🔴" if keys == 0 else "🟢"
-                stock_status += f"{emoji}{license_type}:{keys}\n"
+                stock_status += f"{emoji} {license_type.title()}: {keys}\n"
 
             embed.add_field(
                 name="📦 Stock",
@@ -448,7 +461,7 @@ class ProductManager(commands.GroupCog, name="product"):
                 inline=False
             )
 
-            # Security section - minimal width
+            # Security section
             embed.add_field(
                 name="🛡️ Security",
                 value="```✓Instant Delivery\n✓24/7 Support\n✓Anti-Leak\n✓Auto-Updates```",
