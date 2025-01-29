@@ -316,6 +316,15 @@ class ProductPanel(discord.ui.View):
     async def show_confirmation(self, interaction: discord.Interaction, license_type: str):
         await interaction.response.defer(ephemeral=True)
         
+        # Check stock first
+        keys = await interaction.client.db.get_available_key_count(self.product_id, license_type)
+        if keys == 0:
+            await interaction.followup.send(
+                f"Sorry, {license_type} licenses are currently out of stock!", 
+                ephemeral=True
+            )
+            return
+        
         product = await interaction.client.db.get_product(ObjectId(self.product_id))
         if not product:
             await interaction.followup.send("Product not found!", ephemeral=True)
