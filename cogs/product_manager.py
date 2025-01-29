@@ -9,7 +9,7 @@ import asyncio
 # Add these constants at the top of the file, after the imports
 MARKETPLACE_ICON = "https://i.imgur.com/WZZPViy.png"  # Replace with your direct image link
 MARKETPLACE_BANNER = "https://i.imgur.com/WZZPViy.png"  # Replace with your direct image link
-MARKETPLACE_NAME = "Profit Hub Marketplace"  # Your marketplace name
+MARKETPLACE_NAME = "Shadow Marketplace"  # Your marketplace name
 
 class PaymentMethodSelect(discord.ui.View):
     def __init__(self):
@@ -426,7 +426,7 @@ class ProductManager(commands.GroupCog, name="product"):
                 name="📋 Product Features",
                 value=(
                     "```ansi\n"
-                    f"{features_text}"
+                    f"     {features_text}"  # Added 5 spaces for indentation
                     "```"
                 ),
                 inline=False
@@ -437,9 +437,9 @@ class ProductManager(commands.GroupCog, name="product"):
                 name="💰 License Pricing",
                 value=(
                     "```\n"
-                    f"Daily License    | ${daily_price:.2f}\n"
-                    f"Monthly License  | ${monthly_price:.2f}\n"
-                    f"Lifetime License | ${lifetime_price:.2f}\n"
+                    f"     Daily License    | ${daily_price:.2f}\n"  # Added 5 spaces
+                    f"     Monthly License  | ${monthly_price:.2f}\n"
+                    f"     Lifetime License | ${lifetime_price:.2f}\n"
                     "```"
                 ),
                 inline=False
@@ -453,7 +453,11 @@ class ProductManager(commands.GroupCog, name="product"):
                 stock_status += f"{emoji} {license_type.title()}: {keys}\n"
             embed.add_field(
                 name="📦 Stock Status",
-                value=f"```\n{stock_status}```",
+                value=(
+                    "```\n"
+                    f"     {stock_status}"  # Added 5 spaces
+                    "```"
+                ),
                 inline=False
             )
 
@@ -462,10 +466,10 @@ class ProductManager(commands.GroupCog, name="product"):
                 name="🛡️ Security & Support",
                 value=(
                     "```\n"
-                    "✓ Instant Delivery\n"
-                    "✓ 24/7 Support\n"
-                    "✓ Anti-Leak Protection\n"
-                    "✓ Automatic Updates\n"
+                    "     ✓ Instant Delivery\n"  # Added 5 spaces
+                    "     ✓ 24/7 Support\n"
+                    "     ✓ Anti-Leak Protection\n"
+                    "     ✓ Automatic Updates\n"
                     "```"
                 ),
                 inline=False
@@ -811,7 +815,9 @@ class ProductManager(commands.GroupCog, name="product"):
                 )
                 return
             
-            if product['seller_id'] != str(interaction.user.id):
+            # Check if user is admin or product owner
+            is_admin = interaction.guild.get_role(interaction.client.config.ADMIN_ROLE_ID) in interaction.user.roles
+            if not is_admin and product['seller_id'] != str(interaction.user.id):
                 await interaction.followup.send(
                     "You don't own this product!", 
                     ephemeral=True
