@@ -5,6 +5,7 @@ import asyncio
 from datetime import datetime
 from bson import ObjectId
 import io
+from cogs.product_manager import MARKETPLACE_NAME, MARKETPLACE_ICON
 
 class PaymentMethodSelect(discord.ui.View):
     def __init__(self):
@@ -329,6 +330,20 @@ class TicketManager(commands.GroupCog, name="ticket"):
                 ("Added By", interaction.user.mention, True)
             ]
         )
+
+    async def create_ticket(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="🎫 New Purchase Ticket",
+            description=(
+                f"Welcome {interaction.user.mention}!\n\n"
+                f"Product: **{product['name']}**\n"
+                f"License: **{license_type.title()}**\n"
+                f"Price: **${product['prices'][license_type]}**\n\n"
+                "Please select your payment method below."
+            ),
+            color=discord.Color.blue()
+        )
+        embed.set_footer(text=f"{MARKETPLACE_NAME} • Secure Transaction", icon_url=MARKETPLACE_ICON)
 
 async def setup(bot):
     await bot.add_cog(TicketManager(bot)) 
