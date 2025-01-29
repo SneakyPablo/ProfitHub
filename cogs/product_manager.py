@@ -8,7 +8,7 @@ import asyncio
 
 # Add these constants at the top of the file, after the imports
 MARKETPLACE_ICON = "https://i.imgur.com/WZZPViy.png"  # Replace with your direct image link
-MARKETPLACE_BANNER = "https://i.imgur.com/WZZPViy.png"  # Replace with your direct image link
+MARKETPLACE_BANNER = "https://i.imgur.com/abcd123.png"  # Replace with your direct image link
 MARKETPLACE_NAME = "Shadow Marketplace"  # Your marketplace name
 
 class PaymentMethodSelect(discord.ui.View):
@@ -395,7 +395,7 @@ class ProductManager(commands.GroupCog, name="product"):
             # Create product in database
             product_id = await self.bot.db.create_product(product_data)
             
-            # Create panel embed
+            # Create panel embed with more compact layout
             embed = discord.Embed(
                 title=f"🌟 {name}",
                 description=(
@@ -405,26 +405,23 @@ class ProductManager(commands.GroupCog, name="product"):
                 color=0xf1c40f
             )
 
-            # Add watermark as thumbnail with smaller size and position
+            # Set thumbnail with offset (smaller and more to the left)
             embed.set_thumbnail(url=MARKETPLACE_ICON)
 
-            # Features section - remove extra asterisks and spaces
+            # Features section with compact formatting
             features_text = ""
             feature_emojis = ["⚡", "🎮", "🔧", "🎯", "💫"]
             for emoji, feature in zip(feature_emojis, features):
-                features_text += f"{emoji} {feature}\n"
+                if feature:  # Only add non-empty features
+                    features_text += f"{emoji} {feature}\n"
 
             embed.add_field(
                 name="📋 Product Features",
-                value=(
-                    "```\n"  # Removed ansi to prevent extra width
-                    f"{features_text}"
-                    "```"
-                ),
+                value=f"```{features_text}```",  # Removed newlines and extra formatting
                 inline=False
             )
 
-            # Pricing section - make it more compact
+            # Pricing section with compact layout
             pricing_text = ""
             for license_type, price in [
                 ('daily', daily_price),
@@ -433,41 +430,31 @@ class ProductManager(commands.GroupCog, name="product"):
             ]:
                 keys = await self.bot.db.get_available_key_count(product_id, license_type)
                 color_code = "\u001b[32;1m" if keys > 0 else "\u001b[31;1m"
-                pricing_text += f"{license_type.title()} | {color_code}${price:.2f}\u001b[0m\n"  # Removed "License" word
+                pricing_text += f"{license_type.title()} | {color_code}${price:.2f}\u001b[0m\n"
 
             embed.add_field(
                 name="💰 License Pricing",
-                value=(
-                    "```ansi\n"
-                    f"{pricing_text}"
-                    "```"
-                ),
+                value=f"```ansi\n{pricing_text}```",
                 inline=False
             )
 
-            # Stock status section
+            # Stock status with compact layout
             stock_status = ""
             for license_type in ['daily', 'monthly', 'lifetime']:
                 keys = await self.bot.db.get_available_key_count(product_id, license_type)
                 emoji = "🔴" if keys == 0 else "🟢"
                 stock_status += f"{emoji} {license_type.title()}: {keys}\n"
+
             embed.add_field(
                 name="📦 Stock Status",
-                value=f"```\n{stock_status}```",
+                value=f"```{stock_status}```",
                 inline=False
             )
 
-            # Security & Support section
+            # Security section with compact layout
             embed.add_field(
                 name="🛡️ Security & Support",
-                value=(
-                    "```\n"
-                    "✓ Instant Delivery\n"
-                    "✓ 24/7 Support\n"
-                    "✓ Anti-Leak Protection\n"
-                    "✓ Automatic Updates\n"
-                    "```"
-                ),
+                value="```✓ Instant Delivery\n✓ 24/7 Support\n✓ Anti-Leak Protection\n✓ Automatic Updates```",
                 inline=False
             )
 
