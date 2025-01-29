@@ -400,13 +400,12 @@ class ProductManager(commands.GroupCog, name="product"):
                 title=f"🌟 {name}",
                 description=(
                     f"A premium product by {interaction.user.mention}\n"
-                    f"*Powered by {MARKETPLACE_NAME}*\n"
-                    "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
+                    f"*Powered by {MARKETPLACE_NAME}*"
                 ),
                 color=0xf1c40f
             )
 
-            # Add watermark as thumbnail (moved slightly left)
+            # Add watermark as thumbnail with smaller size
             embed.set_thumbnail(url=MARKETPLACE_ICON)
 
             # Features section
@@ -638,13 +637,11 @@ class ProductManager(commands.GroupCog, name="product"):
             
             # Update panel stock display
             try:
-                for channel in interaction.guild.text_channels:  # Only search text channels
+                for channel in interaction.guild.text_channels:
                     async for message in channel.history(limit=100):
                         if (message.author == self.bot.user and 
                             len(message.embeds) > 0):
                             embed = message.embeds[0]
-                            
-                            # Check if this is the right product panel
                             footer_text = embed.footer.text if embed.footer else ""
                             if f"Product ID: {product_id}" in footer_text:
                                 # Update stock status
@@ -653,8 +650,20 @@ class ProductManager(commands.GroupCog, name="product"):
                                     keys = await self.bot.db.get_available_key_count(product_id, ltype)
                                     emoji = "🔴" if keys == 0 else "🟢"
                                     stock_status += f"{emoji} {ltype.title()}: {keys}\n"
-                                
-                                # Find and update the stock status field
+
+                                # Update pricing with new colors
+                                pricing_text = ""
+                                prices = {
+                                    'daily': product['prices']['daily'],
+                                    'monthly': product['prices']['monthly'],
+                                    'lifetime': product['prices']['lifetime']
+                                }
+                                for ltype, price in prices.items():
+                                    keys = await self.bot.db.get_available_key_count(product_id, ltype)
+                                    color_code = "\u001b[32;1m" if keys > 0 else "\u001b[31;1m"
+                                    pricing_text += f"{ltype.title()} License  | {color_code}${price:.2f}\u001b[0m\n"
+
+                                # Update both fields
                                 for i, field in enumerate(embed.fields):
                                     if field.name == "📦 Stock Status":
                                         embed.set_field_at(
@@ -663,9 +672,15 @@ class ProductManager(commands.GroupCog, name="product"):
                                             value=f"```\n{stock_status}```",
                                             inline=False
                                         )
-                                        await message.edit(embed=embed)
-                                        break
-                                break  # Stop searching after finding the panel
+                                    elif field.name == "💰 License Pricing":
+                                        embed.set_field_at(
+                                            i,
+                                            name="💰 License Pricing",
+                                            value=f"```ansi\n{pricing_text}```",
+                                            inline=False
+                                        )
+                                await message.edit(embed=embed)
+                                break
             except Exception as e:
                 print(f"Error updating panel: {e}")
 
