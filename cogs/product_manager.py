@@ -8,7 +8,7 @@ import asyncio
 
 # Add these constants at the top of the file, after the imports
 MARKETPLACE_ICON = "https://i.imgur.com/WZZPViy.png"  # Replace with your direct image link
-MARKETPLACE_BANNER = "https://i.imgur.com/abcd123.png"  # Replace with your direct image link
+MARKETPLACE_BANNER = "https://i.imgur.com/WZZPViy.png"  # Replace with your direct image link
 MARKETPLACE_NAME = "Shadow Marketplace"  # Your marketplace name
 
 class PaymentMethodSelect(discord.ui.View):
@@ -395,66 +395,63 @@ class ProductManager(commands.GroupCog, name="product"):
             # Create product in database
             product_id = await self.bot.db.create_product(product_data)
             
-            # Create panel embed with more compact layout
+            # Create panel embed with minimal width
             embed = discord.Embed(
                 title=f"🌟 {name}",
-                description=(
-                    f"A premium product by {interaction.user.mention}\n"
-                    f"*Powered by {MARKETPLACE_NAME}*"
-                ),
+                description=f"A premium product by {interaction.user.mention}",
                 color=0xf1c40f
             )
 
-            # Set thumbnail with offset (smaller and more to the left)
+            # Set thumbnail with minimal width
             embed.set_thumbnail(url=MARKETPLACE_ICON)
 
-            # Features section with compact formatting
+            # Features section - minimal width
             features_text = ""
             feature_emojis = ["⚡", "🎮", "🔧", "🎯", "💫"]
             for emoji, feature in zip(feature_emojis, features):
-                if feature:  # Only add non-empty features
-                    features_text += f"{emoji} {feature}\n"
+                if feature:
+                    features_text += f"{emoji}{feature}\n"
 
             embed.add_field(
-                name="📋 Product Features",
-                value=f"```{features_text}```",  # Removed newlines and extra formatting
+                name="📋 Features",
+                value=f"```{features_text.strip()}```",
                 inline=False
             )
 
-            # Pricing section with compact layout
+            # Pricing section - minimal width
             pricing_text = ""
             for license_type, price in [
-                ('daily', daily_price),
-                ('monthly', monthly_price),
-                ('lifetime', lifetime_price)
+                ('Daily', daily_price),
+                ('Monthly', monthly_price),
+                ('Lifetime', lifetime_price)
             ]:
-                keys = await self.bot.db.get_available_key_count(product_id, license_type)
+                keys = await self.bot.db.get_available_key_count(product_id, license_type.lower())
                 color_code = "\u001b[32;1m" if keys > 0 else "\u001b[31;1m"
-                pricing_text += f"{license_type.title()} | {color_code}${price:.2f}\u001b[0m\n"
+                pricing_text += f"{license_type}|{color_code}${price:.2f}\u001b[0m\n"
 
             embed.add_field(
-                name="💰 License Pricing",
-                value=f"```ansi\n{pricing_text}```",
+                name="💰 Pricing",
+                value=f"```ansi\n{pricing_text.strip()}```",
                 inline=False
             )
 
-            # Stock status with compact layout
+            # Stock status - minimal width
             stock_status = ""
-            for license_type in ['daily', 'monthly', 'lifetime']:
-                keys = await self.bot.db.get_available_key_count(product_id, license_type)
+            for license_type in ['Daily', 'Monthly', 'Lifetime']:
+                keys = await self.bot.db.get_available_key_count(product_id, license_type.lower())
                 emoji = "🔴" if keys == 0 else "🟢"
-                stock_status += f"{emoji} {license_type.title()}: {keys}\n"
+                stock_status += f"{emoji}{license_type}:{keys}\n"
 
             embed.add_field(
-                name="📦 Stock Status",
-                value=f"```{stock_status}```",
+                name="📦 Stock",
+                value=f"```{stock_status.strip()}```",
                 inline=False
             )
 
-            # Security section with compact layout
+            # Security section - minimal width
             embed.add_field(
-                name="🛡️ Security & Support",
-                value="```✓ Instant Delivery\n✓ 24/7 Support\n✓ Anti-Leak Protection\n✓ Automatic Updates```",
+                name="🛡️ Security",
+                value="```✓Instant Delivery\n✓24/7 Support\n✓Anti-Leak\n✓Auto-Updates```",
                 inline=False
             )
 
