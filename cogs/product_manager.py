@@ -4,10 +4,11 @@ from discord import app_commands
 from bson import ObjectId
 from datetime import datetime
 import traceback
+import asyncio
 
 # Add these constants at the top of the file, after the imports
-MARKETPLACE_ICON = "https://i.imgur.com/WZZPViy.png"  # Replace with your icon URL
-MARKETPLACE_BANNER = "https://i.imgur.com/WZZPViy.png"  # Replace with your banner URL
+MARKETPLACE_ICON = "https://i.imgur.com/WZZPViy.png"  # Replace with your direct image link
+MARKETPLACE_BANNER = "https://i.imgur.com/WZZPViy.png"  # Replace with your direct image link
 MARKETPLACE_NAME = "Profit Hub Marketplace"  # Your marketplace name
 
 class PaymentMethodSelect(discord.ui.View):
@@ -108,7 +109,94 @@ class SellerConfirmationView(discord.ui.View):
             )
             return
 
-        # Rest of the delivery logic...
+        try:
+            # Mark key as used
+            await interaction.client.db.mark_key_as_used(key['_id'], ticket['buyer_id'])
+            
+            # Add buyer role
+            buyer = interaction.guild.get_member(int(ticket['buyer_id']))
+            buyer_role = interaction.guild.get_role(interaction.client.config.BUYER_ROLE_ID)
+            if buyer and buyer_role:
+                await buyer.add_roles(buyer_role)
+
+            # Send key to buyer
+            key_embed = discord.Embed(
+                title="🔑 Your Product Key",
+                description=f"Thank you for your purchase! Here's your product key:\n\n`{key['key']}`",
+                color=interaction.client.config.MARKETPLACE_COLOR
+            )
+            key_embed.set_footer(text=f"{MARKETPLACE_NAME} • Secure Delivery", icon_url=MARKETPLACE_ICON)
+            
+            try:
+                await buyer.send(embed=key_embed)
+                await interaction.channel.send("✅ Product key has been delivered to buyer's DM!")
+            except discord.Forbidden:
+                await interaction.channel.send(
+                    f"⚠️ Couldn't DM the buyer. Here's the key (visible only in ticket):\n`{key['key']}`"
+                )
+
+            # Update stock display in panel
+            try:
+                for channel in interaction.guild.text_channels:
+                    async for message in channel.history(limit=100):
+                        if (message.author == interaction.client.user and 
+                            len(message.embeds) > 0):
+                            embed = message.embeds[0]
+                            footer_text = embed.footer.text if embed.footer else ""
+                            if f"Product ID: {ticket['product_id']}" in footer_text:
+                                stock_status = ""
+                                for ltype in ['daily', 'monthly', 'lifetime']:
+                                    keys = await interaction.client.db.get_available_key_count(
+                                        ticket['product_id'], 
+                                        ltype
+                                    )
+                                    emoji = "🔴" if keys == 0 else "🟢"
+                                    stock_status += f"{emoji} {ltype.title()}: {keys}\n"
+                                
+                                for i, field in enumerate(embed.fields):
+                                    if field.name == "📦 Stock Status":
+                                        embed.set_field_at(
+                                            i,
+                                            name="📦 Stock Status",
+                                            value=f"```\n{stock_status}```",
+                                            inline=False
+                                        )
+                                        await message.edit(embed=embed)
+                                        break
+                                break
+            except Exception as e:
+                print(f"Error updating stock display: {e}")
+
+            # Send vouch reminder
+            reminder_embed = discord.Embed(
+                title="⭐ Important Information",
+                description=(
+                    f"{buyer.mention}, please note:\n\n"
+                    "1️⃣ You have 24 hours to vouch using the `/review vouch` command\n"
+                    "2️⃣ If you don't vouch, your buyer role will be removed\n"
+                    "3️⃣ This ticket will automatically close in 15 minutes\n\n"
+                    "Need help? Contact the seller before the ticket closes!"
+                ),
+                color=interaction.client.config.MARKETPLACE_COLOR
+            )
+            reminder_embed.set_footer(text=f"{MARKETPLACE_NAME} • Customer Support", icon_url=MARKETPLACE_ICON)
+            await interaction.channel.send(embed=reminder_embed)
+
+            # Disable the button
+            button.disabled = True
+            await interaction.message.edit(view=self)
+
+            # Start auto-close timer
+            await asyncio.sleep(900)  # 15 minutes
+            await interaction.channel.send("⏰ This ticket will close in 60 seconds...")
+            await asyncio.sleep(60)
+
+            # Close ticket
+            await interaction.channel.delete()
+
+        except Exception as e:
+            await interaction.followup.send(f"Error delivering product: {str(e)}", ephemeral=True)
+            print(f"Error in confirm_and_deliver: {e}")
 
 class ProductPanel(discord.ui.View):
     def __init__(self, product_id: str):
