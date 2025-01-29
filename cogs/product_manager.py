@@ -8,7 +8,7 @@ import asyncio
 
 # Add these constants at the top of the file, after the imports
 MARKETPLACE_ICON = "https://i.imgur.com/WZZPViy.png"  # Replace with your direct image link
-MARKETPLACE_BANNER = "https://i.imgur.com/WZZPViy.png"  # Replace with your direct image link
+MARKETPLACE_BANNER = "https://i.imgur.com/abcd123.png"  # Replace with your direct image link
 MARKETPLACE_NAME = "Shadow Marketplace"  # Your marketplace name
 
 class PaymentMethodSelect(discord.ui.View):
@@ -406,15 +406,8 @@ class ProductManager(commands.GroupCog, name="product"):
                 color=0xf1c40f
             )
 
-            # Add watermark as thumbnail
+            # Add watermark as thumbnail (moved slightly left)
             embed.set_thumbnail(url=MARKETPLACE_ICON)
-
-            # Add watermark text at the top
-            embed.add_field(
-                name="",
-                value=f"*Powered by {MARKETPLACE_NAME}*\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
-                inline=False
-            )
 
             # Features section
             features_text = ""
@@ -426,20 +419,28 @@ class ProductManager(commands.GroupCog, name="product"):
                 name="📋 Product Features",
                 value=(
                     "```ansi\n"
-                    f"     {features_text}"  # Added 5 spaces for indentation
+                    f"{features_text}"
                     "```"
                 ),
                 inline=False
             )
 
-            # Pricing section with dark background
+            # Pricing section with colored prices based on stock
+            pricing_text = ""
+            for license_type, price in [
+                ('daily', daily_price),
+                ('monthly', monthly_price),
+                ('lifetime', lifetime_price)
+            ]:
+                keys = await self.bot.db.get_available_key_count(product_id, license_type)
+                color_code = "\u001b[32;1m" if keys > 0 else "\u001b[31;1m"  # Green if in stock, red if out
+                pricing_text += f"{license_type.title()} License  | {color_code}${price:.2f}\u001b[0m\n"
+
             embed.add_field(
                 name="💰 License Pricing",
                 value=(
-                    "```\n"
-                    f"     Daily License    | ${daily_price:.2f}\n"  # Added 5 spaces
-                    f"     Monthly License  | ${monthly_price:.2f}\n"
-                    f"     Lifetime License | ${lifetime_price:.2f}\n"
+                    "```ansi\n"
+                    f"{pricing_text}"
                     "```"
                 ),
                 inline=False
@@ -453,11 +454,7 @@ class ProductManager(commands.GroupCog, name="product"):
                 stock_status += f"{emoji} {license_type.title()}: {keys}\n"
             embed.add_field(
                 name="📦 Stock Status",
-                value=(
-                    "```\n"
-                    f"     {stock_status}"  # Added 5 spaces
-                    "```"
-                ),
+                value=f"```\n{stock_status}```",
                 inline=False
             )
 
@@ -466,10 +463,10 @@ class ProductManager(commands.GroupCog, name="product"):
                 name="🛡️ Security & Support",
                 value=(
                     "```\n"
-                    "     ✓ Instant Delivery\n"  # Added 5 spaces
-                    "     ✓ 24/7 Support\n"
-                    "     ✓ Anti-Leak Protection\n"
-                    "     ✓ Automatic Updates\n"
+                    "✓ Instant Delivery\n"
+                    "✓ 24/7 Support\n"
+                    "✓ Anti-Leak Protection\n"
+                    "✓ Automatic Updates\n"
                     "```"
                 ),
                 inline=False
