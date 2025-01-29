@@ -17,7 +17,7 @@ class Config:
         self.REVIEWS_CHANNEL_ID = int(os.environ.get('REVIEWS_CHANNEL_ID', 0))
         
         # Bot settings
-        self.EMBED_COLOR = Color.blue()
+        self.EMBED_COLOR = Color.from_rgb(241, 196, 15)  # Gold color
         self.AUTO_CLOSE_HOURS = int(os.environ.get('AUTO_CLOSE_HOURS', 48))
         
         # Payment information
@@ -26,6 +26,11 @@ class Config:
             'crypto': os.environ.get('CRYPTO_WALLET', ''),
             'bank': os.environ.get('BANK_DETAILS', '')
         }
+
+        # Marketplace branding
+        self.MARKETPLACE_NAME = os.environ.get('MARKETPLACE_NAME', 'Shadow Marketplace')
+        self.MARKETPLACE_COLOR = Color.from_rgb(241, 196, 15)  # Gold color
+        self.MARKETPLACE_URL = os.environ.get('MARKETPLACE_URL', '')  # Your marketplace website/server
 
     def validate(self):
         """Validate required configuration"""
